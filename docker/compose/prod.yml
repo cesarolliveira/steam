@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  app:
+    image: ${APP_IMAGE_NAME}
+    networks:
+      - app
+    volumes:
+      - app_logs:/var/www/steam/var/log
+    deploy:
+      mode: replicated
+      placement:
+        constraints:
+          - node.role == worker
+          - node.labels.can-run-steam == yes
+
+networks:
+  app:
+    driver: overlay
+
+volumes:
+  app_logs:
+    name: steamlogs
+    driver: local
