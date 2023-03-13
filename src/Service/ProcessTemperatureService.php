@@ -12,19 +12,19 @@ class ProcessTemperatureService
 
     public function execute(): array
     {
-        $dataInputFile = $this->readInputFile();
-        $processedTemperatures = $this->processTemperatures($dataInputFile);
-
+        $data = $this->readInputFile();
+        $data['temperatures'] = $this->processTemperatures($data);
+        $data['processTemperaturesTime'] = $data['temperatures']['processTemperaturesTime'];
+        unset($data['temperatures']['processTemperaturesTime']);
+        $result = $this->calculateOutliers($data['temperatures']);  
+        
         // Exporta os dados para o arquivo JSON
-        $this->exportJson($processedTemperatures);
+        $this->exportJson($result['data']);
 
         // Exporta os dados para o arquivo TXT
-        $this->exportTxt($processedTemperatures);
+        $this->exportTxt($result['data']);
 
-        return [
-            'readFileTime' => $dataInputFile['readFileTime'],
-            'processTemperaturesTime' => $processedTemperatures['processTemperaturesTime'],
-        ];
+        return $data;
     }
 
     private function readInputFile(): array
@@ -39,12 +39,11 @@ class ProcessTemperatureService
         $data = [
             'temperatures' => [],
             'readFileTime' => null,
-            'columns' => [],
         ];
 
         // Pega o nome das colunas do arquivo CSV
         $header = fgetcsv($file);
-        $columns = explode(';', $header[0]);
+        $sensor = explode(';', $header[0]);
 
         // Loop através das linhas do arquivo CSV
         while (($line = fgetcsv($file)) !== false) {
@@ -55,7 +54,7 @@ class ProcessTemperatureService
             foreach ($values as $key => $value) {
                 // Armazena os valores das colunas
                 $data['temperatures'][] = [
-                    'column' => $columns[$key],
+                    'sensor' => $sensor[$key],
                     'value' => $value,
                 ];
             }
@@ -111,7 +110,7 @@ class ProcessTemperatureService
             if ($i === 0) {
                 $result[] = [
                     'id' => $i + 1,
-                    'sensor' => $data['temperatures'][$i]['column'],
+                    'sensor' => $data['temperatures'][$i]['sensor'],
                     'value' => $currentValue,
                     'unit' => 'C',
                     'timestamp' => $date->getTimestamp(),
@@ -128,7 +127,7 @@ class ProcessTemperatureService
 
             $result[] = [
                 'id' => $i + 1,
-                'sensor' => $data['temperatures'][$i]['column'],
+                'sensor' => $data['temperatures'][$i]['sensor'],
                 'value' => $currentValue,
                 'unit' => 'C',
                 'timestamp' => $date->getTimestamp(),
@@ -189,5 +188,79 @@ class ProcessTemperatureService
 
         // Fecha o arquivo
         fclose($export);
+    }
+
+    private function calculateQuartis(array $data): array
+    {
+        $temperatures = [];
+
+        foreach ($data as $value) {
+            $temperatures[] = $value['value'];
+        }
+
+        sort($temperatures);
+        $count = count($data);
+        $totalRows = count($temperatures);
+
+        if ($count % 2 === 0) {
+            $Q1_1 = $temperatures[floor($totalRows + 1) / 4]; 
+            $Q1_2 = $temperatures[floor($totalRows / 4 + 1)];
+            $Q1 = number_format($Q1_1 + (0.25 * ($Q1_2 - $Q1_1)), 2, '.', '');
+        } else {
+            $Q1 = $totalRows / 4;
+        }
+
+        $Q2 = array_sum($temperatures) / count($temperatures);
+
+        if ($count % 2 === 0) {
+            $Q3_1 = $temperatures[3 * floor($totalRows / 4)]; 
+            $Q3_2 = $temperatures[(3 * floor($totalRows / 4) + 1)];
+            $Q3 = number_format($Q3_1 + (0.75 * ($Q3_2 - $Q3_1)), 2, '.', '');
+        } else {
+            $Q3 = ($totalRows / 4) * 3;
+        }
+
+        return [
+            'Q1' => $Q1,
+            'Q2' => $Q2,
+            'Q3' => $Q3,
+        ];
+    }
+
+    private function calculateIQR($data): array
+    {
+        $quartis = $this->calculateQuartis($data);        
+
+        $iqr = $quartis['Q3'] - $quartis['Q1'];
+
+        $median_min = $quartis['Q2'] - (1.5 * $iqr);
+        $median_max = $quartis['Q2'] + (1.5 * $iqr);
+
+        return [
+            'iqr' => $iqr,
+            'median_min' => $median_min,
+            'median_max' => $median_max,
+        ];
+    }
+
+    private function calculateOutliers(array $data): array
+    {
+        $result = $this->calculateIQR($data);
+
+        $outliers = [];
+
+        foreach ($data as $key => $temperature) {
+            if ($temperature['value'] < $result['median_min'] || $temperature['value'] > $result['median_max']) {
+                $outliers[] = array_merge_recursive($temperature, ['outliers' => 'outliers']);
+                $data[$key]['outliers'] = 'outliers';
+            } else {
+                $data[$key]['outliers'] = 'normal';
+            }
+        }
+
+        return [
+            'outliers' => $outliers,
+            'data' => $data,
+        ];
     }
 }
