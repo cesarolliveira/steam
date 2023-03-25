@@ -37,14 +37,16 @@ class ProcessTemperatureCommand extends Command
         $result = $this->processTemperatureService->execute();
 
         $output->writeln([
-            '| Read file time: ' . $result['readFileTime'] . '                      |',
-            '| Process temperatures time: ' . $result['processTemperaturesTime'] . '           |',
+            '| Read file time: '.$result['readFileTime'].'                      |',
+            '| Process temperatures time: '.$result['processTemperaturesTime'].'           |',
+            '| Total de sensores: '.$result['total_sensor'].'                      |',
+            '| Total de temperatures read: '.count($result['temperatures']).'          |',
             '=============================================',
         ]);
 
         $output->writeln([
-            '',
-            'Done!',
+            '|                   Done!                   |',
+            '=============================================',
         ]);
 
         return Command::SUCCESS;

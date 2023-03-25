@@ -16,8 +16,8 @@ class ProcessTemperatureService
         $data['temperatures'] = $this->processTemperatures($data);
         $data['processTemperaturesTime'] = $data['temperatures']['processTemperaturesTime'];
         unset($data['temperatures']['processTemperaturesTime']);
-        $result = $this->calculateOutliers($data['temperatures']);  
-        
+        $result = $this->calculateOutliers($data['temperatures']);
+
         // Exporta os dados para o arquivo JSON
         $this->exportJson($result['data']);
 
@@ -33,7 +33,7 @@ class ProcessTemperatureService
         $startTime = microtime(true);
 
         // Lê o arquivo CSV
-        $file = fopen(self::INPUT_FILE, "r");
+        $file = fopen(self::INPUT_FILE, 'r');
 
         // Inicializa as variáveis para armazenar os dados e as estatísticas
         $data = [
@@ -67,6 +67,7 @@ class ProcessTemperatureService
         $endTime = microtime(true);
 
         $data['readFileTime'] = number_format($endTime - $startTime, 2);
+        $data['total_sensor'] = count($sensor);
 
         return $data;
     }
@@ -102,12 +103,12 @@ class ProcessTemperatureService
 
         $result = [];
 
-        for ($i=0; $i < count($data['temperatures']); $i++) {
+        for ($i = 0; $i < count($data['temperatures']); ++$i) {
             $date = new \DateTimeImmutable();
             $currentValue = $data['temperatures'][$i]['value'];
             $lastResult = end($result);
 
-            if ($i === 0) {
+            if (0 === $i) {
                 $result[] = [
                     'id' => $i + 1,
                     'sensor' => $data['temperatures'][$i]['sensor'],
@@ -202,8 +203,8 @@ class ProcessTemperatureService
         $count = count($data);
         $totalRows = count($temperatures);
 
-        if ($count % 2 === 0) {
-            $Q1_1 = $temperatures[floor($totalRows + 1) / 4]; 
+        if (0 === $count % 2) {
+            $Q1_1 = $temperatures[floor($totalRows + 1) / 4];
             $Q1_2 = $temperatures[floor($totalRows / 4 + 1)];
             $Q1 = number_format($Q1_1 + (0.25 * ($Q1_2 - $Q1_1)), 2, '.', '');
         } else {
@@ -212,9 +213,9 @@ class ProcessTemperatureService
 
         $Q2 = array_sum($temperatures) / count($temperatures);
 
-        if ($count % 2 === 0) {
-            $Q3_1 = $temperatures[3 * floor($totalRows / 4)]; 
-            $Q3_2 = $temperatures[(3 * floor($totalRows / 4) + 1)];
+        if (0 === $count % 2) {
+            $Q3_1 = $temperatures[3 * floor($totalRows / 4)];
+            $Q3_2 = $temperatures[3 * floor($totalRows / 4) + 1];
             $Q3 = number_format($Q3_1 + (0.75 * ($Q3_2 - $Q3_1)), 2, '.', '');
         } else {
             $Q3 = ($totalRows / 4) * 3;
@@ -229,7 +230,7 @@ class ProcessTemperatureService
 
     private function calculateIQR($data): array
     {
-        $quartis = $this->calculateQuartis($data);        
+        $quartis = $this->calculateQuartis($data);
 
         $iqr = $quartis['Q3'] - $quartis['Q1'];
 
