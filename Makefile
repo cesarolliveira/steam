@@ -118,22 +118,22 @@ help:
 	@echo '  ${COLOR_ITEM}group${COLOR_RESET}                  $(HOST_GROUP)(gid=$(HOST_GID))'
 
 build:
-	DOCKER_BUILDKIT=1 docker-compose --file $(DOCKER_COMPOSE_FILE) build $(options) $(service)
+	DOCKER_BUILDKIT=1 docker compose --file $(DOCKER_COMPOSE_FILE) build $(options) $(service)
 
 rebuild:
 	$(CMAKE) build options="--no-cache $(options)"
 
 up:
-	docker-compose --file $(DOCKER_COMPOSE_FILE) up --detach $(SERVICE_APP)
+	docker compose --file $(DOCKER_COMPOSE_FILE) up --detach $(SERVICE_APP)
 
 down:
-	docker-compose --file $(DOCKER_COMPOSE_FILE) down
+	docker compose --file $(DOCKER_COMPOSE_FILE) down
 
 run:
-	docker-compose --file $(DOCKER_COMPOSE_FILE) run --rm $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
+	docker compose --file $(DOCKER_COMPOSE_FILE) run --rm $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
 
 exec:
-	docker-compose --file $(DOCKER_COMPOSE_FILE) exec $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
+	docker compose --file $(DOCKER_COMPOSE_FILE) exec $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
 
 bash:
 	$(CMAKE) run cmd="/bin/bash $(cmd)"
@@ -142,7 +142,7 @@ shell:
 	$(CMAKE) run cmd="/bin/sh $(cmd)"
 
 log:
-	docker-compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
+	docker compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
 
 # Compound targets:
 .PHONY: deploy refresh
