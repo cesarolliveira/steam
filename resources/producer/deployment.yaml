@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer  # Nome do Deployment para fácil identificação no cluster
+spec:
+  replicas: 1  # Define a quantidade de réplicas do serviço, aqui é apenas 1
+  selector:
+    matchLabels:
+      app: producer  # Define o seletor para encontrar Pods com essa label
+  template:
+    metadata:
+      labels:
+        app: producer  # Define a label do Pod para o seletor encontrar
+    spec:
+      containers:
+      - name: producer  # Nome do contêiner
+        image: luisfeliphe66/producer:latest  # Imagem Docker do serviço
+        env:
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"  # Endereço do RabbitMQ dentro do cluster Kubernetes
+        - name: RABBITMQ_QUEUE
+          value: "steam"  # Nome da fila RabbitMQ onde as mensagens serão enviadas
