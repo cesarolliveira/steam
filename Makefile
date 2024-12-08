@@ -1,13 +1,12 @@
 SHELL := /bin/bash
 -include .env
--include .env.dev
--include .env.local
 export
 
 export HOST_UID:=$(shell id --user)
 export HOST_USER:=$(shell id --user --name)
 export HOST_GID:=$(shell id --group)
 export HOST_GROUP:=$(shell id --group --name)
+export DATE_CRONJOB:=$(shell date +%s) # resolver B.o
 
 COLOR_RESET := $(shell tput sgr0)
 COLOR_ITEM := $(shell tput setaf 2)
@@ -20,11 +19,6 @@ SPACE_CHAR=$(subst ,, )
 
 SERVICE_APP=app
 DOCKER_COMPOSE_FILE=docker/compose/dev.yml
-SYMFONY_WEB_DIR=public
-SYMFONY_ARQUIVOS_DIR=$(SYMFONY_WEB_DIR)/arquivos
-SYMFONY_VAR_DIR=var
-SYMFONY_CACHE_DIR=$(SYMFONY_VAR_DIR)/cache
-SYMFONY_LOGS_DIR=$(SYMFONY_VAR_DIR)/logs
 
 # General targets:
 .PHONY: help build rebuild up down run exec bash shell log
@@ -82,23 +76,8 @@ help:
 	@echo '${COLOR_SESSION}Compound targets:${COLOR_RESET}'
 	@echo '  ${COLOR_ITEM}deploy${COLOR_RESET}                 Prepare the environment, prepare the database, and prepare and start the application'
 	@echo ''		
-	@echo '  ${COLOR_ITEM}refresh${COLOR_RESET}                Install the dependency, and create the assets and the cache'
-	@echo ''
 	@echo '${COLOR_SESSION}App targets:${COLOR_RESET}'
-	@echo '  ${COLOR_ITEM}composer${COLOR_RESET}               Run Composer'
-	@echo '                           Options:'	
-	@echo '                             ${COLOR_ITEM}cmd=${COLOR_VAL}VAL${COLOR_RESET}     (optional) ${COLOR_DEFAULT_VAL}[default: list]${COLOR_RESET}'
 	@echo ''
-	@echo "  ${COLOR_ITEM}console${COLOR_RESET}                Run Symfony's console"
-	@echo '                           Options:'	
-	@echo '                             ${COLOR_ITEM}cmd=${COLOR_VAL}VAL${COLOR_RESET}     (optional) ${COLOR_DEFAULT_VAL}[default: list]${COLOR_RESET}'
-	@echo ''	
-	@echo '  ${COLOR_ITEM}structure${COLOR_RESET}              Create all folders and files, and assign all permissions required to the application start'
-	@echo ''
-	@echo '  ${COLOR_ITEM}dependency${COLOR_RESET}             Install Composer packages'
-	@echo ''			
-	@echo '  ${COLOR_ITEM}cache${COLOR_RESET}                  Rebuild Symfony cache'
-	@echo ''			
 	@echo '${COLOR_SESSION}Docker targets:${COLOR_RESET}'
 	@echo '  ${COLOR_ITEM}prune${COLOR_RESET}                  Remove unused objects'
 	@echo ''
@@ -145,39 +124,21 @@ log:
 	docker compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
 
 # Compound targets:
-.PHONY: deploy refresh
-
 deploy:
 	$(CMAKE) down
-	$(CMAKE) structure
 	$(CMAKE) build
-	$(CMAKE) refresh
 	$(CMAKE) up
 
-refresh:
-	$(CMAKE) dependency
-	$(CMAKE) cache
+build-consumer:
+	docker build --file resources/consumer/Dockerfile --no-cache --tag luisfeliphe66/consumer:test .
+	docker push luisfeliphe66/consumer:test
 
-# App targets:
-.PHONY: composer console structure dependency cache
+build-producer:
+	docker build --file resources/producer/Dockerfile --no-cache --tag luisfeliphe66/producer:latest .
+	docker push luisfeliphe66/producer:latest
 
-composer:
-	$(CMAKE) run cmd="composer $(cmd)"
-
-console:
-	$(CMAKE) run cmd="bin/console $(cmd)"
-
-structure:
-	@sudo mkdir --parents --verbose $(SYMFONY_ARQUIVOS_DIR) $(SYMFONY_CACHE_DIR) $(SYMFONY_LOGS_DIR)
-	@sudo chown --recursive --verbose ${HOST_USER}:${HOST_GROUP} $(SYMFONY_ARQUIVOS_DIR) $(SYMFONY_CACHE_DIR) $(SYMFONY_LOGS_DIR)
-
-dependency:
-	@sudo rm --force --recursive --verbose vendor/
-	$(CMAKE) composer cmd="install --no-interaction -vvv"
-
-cache:
-#	@see https://symfony.com/blog/new-in-symfony-3-3-deprecated-cache-clear-with-warmup
-	$(CMAKE) console cmd="cache:clear --env=dev --no-interaction"
+create-cronjob:
+	kubectl create job manual-import-producer -n steam --image luisfeliphe66/producer:latest
 
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image
@@ -199,11 +160,3 @@ prune-network:
 
 prune-volume:
 	docker volume prune	
-
-# Utils:
-uppercase=$(shell echo $(1) | tr  '[:lower:]' '[:upper:]')
-
-get-em=$(EM_$(call uppercase, $(1)))
-
-get-migration-folder=$(MIGRATION_FOLDER_$(call uppercase, $(1)))
-	

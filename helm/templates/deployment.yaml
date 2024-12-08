@@ -36,6 +36,17 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: "RABBITMQ_HOST"
+            value: "{{ .Values.rabbitmq.host }}"
+          - name: "RABBITMQ_PORT"
+            value: "{{ .Values.rabbitmq.port }}"
+          - name: "RABBITMQ_USERNAME"
+            value: "{{ .Values.rabbitmq.username }}"
+          - name: "RABBITMQ_PASSWORD"
+            value: "{{ .Values.rabbitmq.password }}"
+          - name: "RABBITMQ_QUEUE"
+            value: "{{ .Values.rabbitmq.queue }}"
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

@@ -11,4 +11,4 @@ COPY temperature.csv /dados.csv
 WORKDIR /app
 
 # Comando para executar o serviço
-CMD ["python", "producer.py"]
+CMD ["python", "producer.py", "echo 'Processo finalizado'; exit 0"] 

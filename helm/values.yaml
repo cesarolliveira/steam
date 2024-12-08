@@ -9,11 +9,12 @@ replicaCount: 1
 image:
   repository: luisfeliphe66/consumer
   # This sets the pull policy for images.
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  tag: "test"
 
-
+# This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: "consumer"
@@ -53,7 +54,7 @@ service:
   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
   type: ClusterIP
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  port: 9000
+  port: 80
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
@@ -78,8 +79,8 @@ resources:
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
   limits:
-    cpu: 256m
-    memory: 128Mi
+    cpu: 1000m
+    memory: 256Mi
   requests:
     cpu: 100m
     memory: 64Mi
@@ -120,3 +121,10 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+rabbitmq:
+  host: rabbitmq.steam.svc.cluster.local
+  user: user
+  password: 123456789
+  port: 5672
+  queue: steam
