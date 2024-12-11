@@ -2,9 +2,15 @@
 # Projeto Steam
 
 ## **Objetivo do Projeto**
-Este projeto utiliza Kubernetes para orquestrar dois serviços principais: `Producer` e `Consumer`. 
-O `Producer` insere mensagens no RabbitMQ, enquanto o `Consumer` processa essas mensagens. 
-O sistema usa o Helm para gerenciamento de deploys, e as imagens Docker dos serviços estão publicadas no Docker Hub.
+ - Projeto de Monitoramento de Sensores da Caldeira Industrial.
+ - Este projeto é destinado à leitura e processamento de dados provenientes de sensores instalados em uma caldeira industrial.
+ - Os serviços principais, Producer e Consumer, desempenham os seguintes papéis:
+  - Producer: Captura os dados em tempo real dos sensores da caldeira e os insere no sistema de mensageria RabbitMQ.
+  - Consumer: Processa e analisa as mensagens recebidas, gerando insights ou acionando alertas em caso de anomalias ou falhas detectadas.
+ - Este projeto utiliza Kubernetes para orquestrar serviço principal: `Consumer`. 
+ - O `Producer` insere mensagens no RabbitMQ, enquanto o `Consumer` processa essas mensagens. 
+ - O sistema usa o Helm para gerenciamento de deploys, e as imagens Docker dos serviços estão publicadas no Docker Hub.
+
 
 ---
 
@@ -97,12 +103,6 @@ kubectl get all -n steam
   ```bash
   kubectl run producer -n steam --image luisfeliphe66/producer:latest
   ```
-
-- Criar um `Job` manual no `Producer`:
-  ```bash
-  kubectl create job manual-import-producer-$(date +%s) -n steam --image luisfeliphe66/producer:latest
-  ```
-
 ---
 
 ## **6. Desinstalação**
@@ -117,15 +117,30 @@ helm uninstall -n steam rabbitmq
 helm uninstall -n steam consumer
 ```
 
-### **6.3 Producer**
-```bash
-helm uninstall -n steam producer
-```
+## **7. Upgrade**
 
+### **7.1 Upgrade consumer**
+```bash
+helm upgrade --install --create-namespace --namespace steam consumer ./helm -f helm/values.yaml
+```
+## **8. auto-scaling**
+
+```bash
+watch kubectl get hpa -A
+```
+```bash
+watch kubectl get pods -n steam
+```
+### **9. create/delete cronjob**
+```bash
+make delete-jobs
+```
+```bash
+make delete-jobs
+```
 ---
 
-## **7. Estrutura de Arquivos do Projeto**
+## **10. Estrutura de Arquivos do Projeto**
 - **`helm`**: Configurações de deployment do Helm.
-- **`resources/producer/Dockerfile`**: Dockerfile para o Producer.
-- **`resources/consumer/Dockerfile`**: Dockerfile para o Consumer.
+- **`Dockerfile`**: Dockerfile para o Producer e Consumer.
 - **`resources/rabbitmq/values.yaml`**: Configurações específicas para o RabbitMQ.
