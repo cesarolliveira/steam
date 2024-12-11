@@ -72,17 +72,6 @@ O sistema usa o Helm para gerenciamento de deploys, e as imagens Docker dos serv
 
 ## **4. Deploy das Aplicações com Helm**
 
-### **4.1 Producer**
-1. **Deploy:**
-   ```bash
-   helm upgrade --install --create-namespace --namespace steam producer ./helm -f helm/values.yaml
-   ```
-
-2. **Acessar o pod:**
-   ```bash
-   kubectl exec -it producer -n steam -- /bin/bash
-   ```
-
 ### **4.2 Consumer**
 1. **Deploy:**
    ```bash

@@ -105,8 +105,3 @@ try:
 
 except KeyboardInterrupt:
     logger.info("Interrompido pelo usuário.")
-
-finally:
-    # Feche a conexão com o RabbitMQ
-    connection.close()
-    logger.info("Conexão com RabbitMQ fechada.")

@@ -8,6 +8,7 @@ export HOST_GID:=$(shell id --group)
 export HOST_GROUP:=$(shell id --group --name)
 export DATE_CRONJOB:=$(shell date +%s) # resolver B.o
 
+
 COLOR_RESET := $(shell tput sgr0)
 COLOR_ITEM := $(shell tput setaf 2)
 COLOR_VAL := $(shell tput setaf 4)
@@ -130,15 +131,22 @@ deploy:
 	$(CMAKE) up
 
 build-consumer:
-	docker build --file resources/consumer/Dockerfile --no-cache --tag luisfeliphe66/consumer:test .
-	docker push luisfeliphe66/consumer:test
+	docker build --file Dockerfile --no-cache --target consumer --tag luisfeliphe66/consumer:v1.0 .
+	docker push luisfeliphe66/consumer:v1.0
 
 build-producer:
-	docker build --file resources/producer/Dockerfile --no-cache --tag luisfeliphe66/producer:latest .
-	docker push luisfeliphe66/producer:latest
+	docker build --file Dockerfile --no-cache --target producer --tag luisfeliphe66/producer:v1.0 .
+	docker push luisfeliphe66/producer:v1.0
+
+delete-jobs:
+	@if [ -n "$$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer")" ]; then \
+		kubectl delete job.batch -n default $$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer"); \
+	else \
+		echo "No jobs found matching 'manual-import-producer'"; \
+	fi
 
 create-cronjob:
-	kubectl create job manual-import-producer -n steam --image luisfeliphe66/producer:latest
+	kubectl create job manual-import-producer --image luisfeliphe66/producer:v1.0
 
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image
