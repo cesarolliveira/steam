@@ -128,6 +128,8 @@ helm upgrade --install --create-namespace --namespace steam consumer ./helm -f h
 ```
 ## **8. auto-scaling**
 
+![alt text](Steam.png)
+
 ## Explicação do Dimensionador Horizontal de Pods (HPA) STEAM
 - Visão Geral
 
