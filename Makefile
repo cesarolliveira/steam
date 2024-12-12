@@ -124,12 +124,6 @@ shell:
 log:
 	docker compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
 
-# Compound targets:
-deploy:
-	$(CMAKE) down
-	$(CMAKE) build
-	$(CMAKE) up
-
 build-consumer:
 	docker build --file Dockerfile --no-cache --target consumer --tag luisfeliphe66/consumer:v1.0 .
 	docker push luisfeliphe66/consumer:v1.0

@@ -11,7 +11,10 @@
  - O `Producer` insere mensagens no RabbitMQ, enquanto o `Consumer` processa essas mensagens. 
  - O sistema usa o Helm para gerenciamento de deploys, e as imagens Docker dos serviços estão publicadas no Docker Hub.
 
+## **Resultado**
 
+ - Agora o ID do lote foi ajustado para ser baseado no timestamp do momento em que o lote é processado. 
+ - O formato é `YYYY-MM-DD_HH-MM`, o que facilita a visualização de dados por minuto para gráficos temporais.
 ---
 
 ## **1. Pré-requisitos**
@@ -125,6 +128,57 @@ helm upgrade --install --create-namespace --namespace steam consumer ./helm -f h
 ```
 ## **8. auto-scaling**
 
+## Explicação do Dimensionador Horizontal de Pods (HPA) STEAM
+- Visão Geral
+
+      A configuração fornecida demonstra uma configuração avançada do Dimensionador Horizontal de Pods (HPA) no Kubernetes, projetado para ajustar dinamicamente o número de réplicas de pods com base na utilização de recursos.
+
+- Detalhes Principais da Configuração
+      Limites de Escalonamento
+
+      Réplicas Mínimas: 1 pod
+      Réplicas Máximas: 4 pods
+
+- Gatilhos de Escalonamento
+      O dimensionador tomará decisões de escalonamento com base em duas métricas principais:
+
+      Utilização de CPU: Dispara escalonamento quando excede 70% da CPU alocada
+      Utilização de Memória: Dispara escalonamento quando excede 70% da memória alocada
+
+- Comportamento de Escalonamento
+
+      Mecanismo de Redução de Escala
+      Janela de Estabilização: 60 segundos
+      Previne flutuações rápidas de escalonamento
+      Permite tempo para o sistema se estabilizar antes de reduzir réplicas
+
+
+- Política de Redução de Escala:
+
+      Pode reduzir até 100% das réplicas atuais por minuto
+      Ajuda a evitar quedas repentinas de capacidade
+
+- Mecanismo de Aumento de Escala
+
+      Política de Aumento de Escala:
+
+      Pode aumentar até 100% das réplicas atuais por minuto
+      Permite resposta rápida a aumentos de carga
+
+- Benefícios
+
+      Otimização Automática de Recursos: Ajusta dinamicamente recursos com base na demanda real
+      Eficiência de Custos: Mantém o mínimo de réplicas necessárias durante períodos de tráfego baixo
+      Manutenção de Desempenho: Escala rapidamente durante períodos de alta carga
+
+- Práticas Recomendadas
+
+      Monitore padrões reais de utilização de recursos
+      Ajuste os limites com base nos requisitos específicos da aplicação
+      Combine com o Dimensionador de Cluster para uma estratégia de escalonamento abrangente
+
+
+### Comandos:
 ```bash
 watch kubectl get hpa -A
 ```
@@ -136,9 +190,19 @@ watch kubectl get pods -n steam
 make delete-jobs
 ```
 ```bash
-make delete-jobs
+make create-jobs
 ```
 ---
+
+## **Exibe todos pods no namespace steam**
+```bash
+kubectl get pods -n steam
+```
+
+Atachar no container do consumer
+```bash
+kubectl exec -it -n steam consumer-84bdc6f7cc-2qppr -- bash
+```
 
 ## **10. Estrutura de Arquivos do Projeto**
 - **`helm`**: Configurações de deployment do Helm.
