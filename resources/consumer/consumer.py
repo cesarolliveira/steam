@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 import time
 from datetime import datetime
+import numpy as np
 
 # Configuração do RabbitMQ
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq.steam.svc.cluster.local')
@@ -13,7 +14,7 @@ RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', '123456789')
 
 # Configuração do logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Caminho do arquivo JSON e tamanho do lote
@@ -32,6 +33,35 @@ def connect_to_rabbitmq():
     channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
     return connection, channel
 
+def detectar_outliers(temperaturas, lote_id, sensor):
+    """
+    Detecta outliers em uma lista de temperaturas usando o método do intervalo interquartil (IQR).
+    Retorna um dicionário com os índices como chaves e os valores considerados outliers.
+    """
+    if not temperaturas:
+        return {}
+
+    q1 = np.percentile(temperaturas, 25)
+    q3 = np.percentile(temperaturas, 75)
+    iqr = q3 - q1
+
+    lim_inferior = q1 - 1.5 * iqr
+    lim_superior = q3 + 1.5 * iqr
+
+    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Q1: {q1}, Q3: {q3}, IQR: {iqr}")
+    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Limite Inferior: {lim_inferior}, Limite Superior: {lim_superior}")
+
+    outliers = {
+        idx: temp
+        for idx, temp in enumerate(temperaturas)
+        if temp < lim_inferior or temp > lim_superior
+    }
+
+    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Temperaturas: {temperaturas}")
+    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Outliers Detectados: {outliers}")
+
+    return outliers
+
 def salvar_mensagens_em_json(dados_agrupados, lote_id):
     # Lê os dados existentes, se houver
     if Path(OUTPUT_FILE).exists():
@@ -46,15 +76,22 @@ def salvar_mensagens_em_json(dados_agrupados, lote_id):
 
     for sensor, data in dados_agrupados.items():
         temperaturas = data["temperaturas"][:BATCH_SIZE]
+        temperaturas_numeradas = {
+            idx: temp for idx, temp in enumerate(temperaturas)
+        }
         media = round(sum(temperaturas) / len(temperaturas), 2) if temperaturas else 0
         temp_min = min(temperaturas) if temperaturas else None
         temp_max = max(temperaturas) if temperaturas else None
+
+        # Detecta outliers
+        outliers = detectar_outliers(temperaturas, lote_id, sensor)
 
         resultados[lote_key][sensor] = {
             "media": media,
             "minima": temp_min,
             "maxima": temp_max,
-            "temperaturas": temperaturas
+            "temperaturas": temperaturas_numeradas,
+            "outliers": outliers
         }
 
     # Salva os dados atualizados
