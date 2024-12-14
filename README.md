@@ -126,7 +126,7 @@ helm uninstall -n steam consumer
 ```bash
 helm upgrade --install --create-namespace --namespace steam consumer ./helm -f helm/values.yaml
 ```
-## **8. auto-scaling**
+## **8. Auto-scaling**
 
 ![alt text](Steam.png)
 
