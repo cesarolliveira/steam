@@ -6,6 +6,7 @@ from pathlib import Path
 import time
 from datetime import datetime
 import numpy as np
+import uuid
 
 # Configuração do RabbitMQ
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq.steam.svc.cluster.local')
@@ -18,8 +19,8 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Caminho do arquivo JSON e tamanho do lote
-OUTPUT_FILE = "result.json"
-BATCH_SIZE = 60
+OUTPUT_FILE = "/data/result.json"  # Caminho ajustado para salvar em /data dentro do container
+BATCH_SIZE = 200
 
 def connect_to_rabbitmq():
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -63,6 +64,8 @@ def detectar_outliers(temperaturas, lote_id, sensor):
     return outliers
 
 def salvar_mensagens_em_json(dados_agrupados, lote_id):
+    Path("/data").mkdir(parents=True, exist_ok=True)
+    
     # Lê os dados existentes, se houver
     if Path(OUTPUT_FILE).exists():
         with open(OUTPUT_FILE, "r") as f:
@@ -94,7 +97,7 @@ def salvar_mensagens_em_json(dados_agrupados, lote_id):
             "outliers": outliers
         }
 
-    # Salva os dados atualizados
+    # Salva os dados atualizados no diretório /data dentro do container
     with open(OUTPUT_FILE, "w") as f:
         json.dump(resultados, f, indent=4)
 
@@ -126,8 +129,8 @@ def processar_lote(channel):
                     except ValueError:
                         continue
 
-        # Define o ID do lote como o timestamp formatado
-        lote_id = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        # Define o ID do lote como o timestamp formatado + UUID curto
+        lote_id = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{uuid.uuid4().hex[:8]}"
         salvar_mensagens_em_json(dados_agrupados, lote_id)
 
 connection, channel = connect_to_rabbitmq()

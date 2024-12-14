@@ -35,6 +35,9 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          volumeMounts:
+            - name: {{ .Values.volume.name }}  # Referência ao volume
+              mountPath: {{ .Values.volume.mountPath }}  # Caminho onde o volume será montado (dentro do container)
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
           - name: "RABBITMQ_HOST"
@@ -57,14 +60,15 @@ spec:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- with .Values.volumeMounts }}
-          volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
       volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        - name: {{ .Values.volume.name }}  # Referência ao volume
+          {{- if eq .Values.volume.type "emptyDir" }}
+          emptyDir: {}  # Tipo de volume 'emptyDir'
+          {{- else if eq .Values.volume.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.volume.path }}  # Caminho do nó onde o volume é mapeado
+            type: Directory  # Tipo do hostPath
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
