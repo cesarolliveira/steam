@@ -103,6 +103,13 @@ build:
 rebuild:
 	$(CMAKE) build options="--no-cache $(options)"
 
+deploy:
+	@echo 'Building the Streamlit temperature app...'
+	docker build -t streamlit-temperature-app .
+	@echo 'Running the Streamlit temperature app on port 8501...'
+	docker run -p 8501:8501 streamlit-temperature-app
+
+
 up:
 	docker compose --file $(DOCKER_COMPOSE_FILE) up --detach $(SERVICE_APP)
 

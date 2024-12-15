@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Caminho do arquivo JSON e tamanho do lote
 OUTPUT_FILE = "/data/result.json"  # Caminho ajustado para salvar em /data dentro do container
-BATCH_SIZE = 200
+BATCH_SIZE = 60
 
 def connect_to_rabbitmq():
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)

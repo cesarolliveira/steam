@@ -1,29 +1,19 @@
-ARG PYTHON_VERSION=3.9-slim
+# Base Image
+FROM python:3.9-slim
 
-# Usa uma imagem Python como base
-FROM python:${PYTHON_VERSION} AS consumer
-
+# Definir diretório de trabalho
 WORKDIR /app
 
-COPY resources/consumer/requirements.txt /app/requirements.txt
-COPY resources/consumer/consumer.py /app/consumer.py
+# Copiar arquivos para o container
+COPY app.py ./
+COPY result.json ./
 
-# Instala dependências
-RUN pip install -r requirements.txt
+# Instalar dependências
+RUN pip install streamlit pandas
+RUN pip install streamlit matplotlib
 
-CMD ["python", "consumer.py"]
+# Expôr a porta
+EXPOSE 8501
 
-# Usa uma imagem Python como base
-FROM python:${PYTHON_VERSION} AS producer
-
-# Instala dependências
-RUN pip install pandas pika
-
-# Copia o código e o arquivo CSV para o contêiner
-COPY resources/producer/producer.py /app/producer.py
-COPY temperature.csv /dados.csv
-
-WORKDIR /app
-
-# Comando para executar o serviço
-CMD ["python", "producer.py", "echo 'Processo finalizado'"] 
+# Comando de inicialização
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.enableCORS=false"]
