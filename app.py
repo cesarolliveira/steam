@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Configuração da página
 st.set_page_config(
-    page_title="Elasteam",  # Título da página no navegador
-    page_icon="🌡️",  # Ícone que aparecerá na aba do navegador (pode ser um emoji ou um caminho de imagem)
-    layout="wide"  # Layout da página
+    page_title="Elasteam",
+    page_icon="🌡️",
+    layout="wide"
 )
 
 # Função para carregar e exibir dados JSON
@@ -59,22 +60,31 @@ if data is not None:
         if temperaturas_termais:
             # Criando o DataFrame a partir das temperaturas térmicas
             df_termal = pd.DataFrame(temperaturas_termais, columns=["Temperature"])
-            df_termal["Time"] = range(len(df_termal))
 
             st.title("Gráfico de Temperaturas Térmicas")
 
             # Detectando outliers
             outliers, limite_inferior, limite_superior = detectar_outliers(df_termal)
 
-            # Plotando o gráfico de temperatura térmica com Matplotlib
+            # Plotando o gráfico de caixa (boxplot) com Seaborn
             plt.figure(figsize=(10, 6))
-            plt.plot(df_termal["Time"], df_termal["Temperature"], color='b', label="Temperatura", alpha=0.7)
-            plt.scatter(outliers["Time"], outliers["Temperature"], color='r', label="Outliers", zorder=5)
-            plt.title("Temperatura Térmica ao longo do tempo com Outliers")
-            plt.xlabel("Tempo")
-            plt.ylabel("Temperatura Térmica (°C)")
-            plt.grid(True)
-            plt.legend()
+            sns.boxplot(data=df_termal, x='Temperature', color='skyblue', fliersize=7, flierprops=dict(markerfacecolor='r', marker='o', markersize=7))
+
+            # Adicionando título e rótulos
+            plt.title("Distribuição das Temperaturas Térmicas")
+            plt.xlabel("Temperatura Térmica (°C)")
+
+            # Criando a legenda personalizada para 'Temperatura' e 'Outliers'
+            handles, labels = plt.gca().get_legend_handles_labels()
+
+            # Criando a legenda dos outliers
+            outlier_handle = plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='r', markersize=7)
+            
+            # Criando a legenda do boxplot (Temperatura)
+            boxplot_handle = plt.Line2D([0], [0], color='skyblue', lw=4)
+            
+            # Adicionando as duas legendas
+            plt.legend(handles=[boxplot_handle, outlier_handle], labels=["Temperatura", "Outliers"], title="Categorias", loc="upper right")
 
             # Exibir o gráfico no Streamlit
             st.pyplot(plt)

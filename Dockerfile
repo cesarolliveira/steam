@@ -11,7 +11,7 @@ COPY result.json ./
 # Instalar dependências
 RUN pip install streamlit pandas
 RUN pip install streamlit matplotlib
-
+RUN pip install streamlit seaborn
 # Expôr a porta
 EXPOSE 8501
 
