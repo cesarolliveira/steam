@@ -187,7 +187,7 @@ watch kubectl get hpa -A
 ```bash
 watch kubectl get pods -n steam
 ```
-### **9. create/delete cronjob**
+### **9. Create/Delete cronjob**
 ```bash
 make delete-jobs
 ```
@@ -205,8 +205,40 @@ Atachar no container do consumer
 ```bash
 kubectl exec -it -n steam consumer-84bdc6f7cc-2qppr -- bash
 ```
+## **10. Deploy do Aplicativo Streamlit de Temperatura**
 
-## **10. Estrutura de Arquivos do Projeto**
-- **`helm`**: Configurações de deployment do Helm.
-- **`Dockerfile`**: Dockerfile para o Producer e Consumer.
+ - Comandos de Deploy
+  
+  - Para executar o deploy do aplicativo Streamlit de Temperatura, utilize os seguintes comandos:
+  - Objetivo: Este comando constrói a imagem Docker do aplicativo Streamlit de temperatura e executa a imagem do aplicativo Streamlit de temperatura em um contêiner Docker.
+
+   ```bash
+   make deploy
+   ```
+## **11. Estrutura de Arquivos do Projeto**
+- **`helm`**: Configurações de deployment do Helm Producer.
 - **`resources/rabbitmq/values.yaml`**: Configurações específicas para o RabbitMQ.
+- **`streamlit_app/`**:`Dockerfile`: Define a construção da imagem Docker do aplicativo Streamlit.
+- **`streamlit_app/`**:`app.py`: Código Python que define a lógica do aplicativo Streamlit para visualização de dados de temperatura.
+
+
+```bash
+Projeto-Steam/
+├── helm/                              # Configurações do Helm para o deploy das aplicações
+│   ├── consumer/                      # Configuração de Helm para o Consumer
+│   └── values.yaml                    # Configurações para o RabbitMQ e outras variáveis de ambiente
+├── resources/                         # Recursos utilizados no projeto
+│   ├── producer/                      # Código do Producer
+│   │   └── Dockerfile                 # Dockerfile do Producer
+│   ├── consumer/                      # Código do Consumer
+│   │   └── Dockerfile                 # Dockerfile do Consumer
+│   └── rabbitmq/                      # Arquivos de configuração do RabbitMQ
+│       └── values.yaml                # Configurações específicas do RabbitMQ
+├── docker-compose.yml                 # Arquivo Docker Compose para a configuração local
+├── streamlit_app/                     # Novo diretório para o aplicativo Streamlit de Temperatura
+│   ├── Dockerfile                     # Dockerfile do aplicativo Streamlit
+│   ├── app.py                         # Código Python do aplicativo Streamlit
+│   ├── requirements.txt               # Dependências para o aplicativo Streamlit
+│   └── Makefile                       # Makefile para deploy do Streamlit
+└── README.md                          # Arquivo de documentação do projeto
+```

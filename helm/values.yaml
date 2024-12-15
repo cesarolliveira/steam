@@ -116,17 +116,12 @@ autoscaling:
           periodSeconds: 60
 
 # Additional volumes on the output Deployment definition.
-volumes: []
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
-
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
+volume:
+  enabled: true
+  name: data-volume
+  type: hostPath
+  path: /home/luisfeliphe/projetos/steam/data  # Caminho no nó onde o volume será montado
+  mountPath: /data  # Caminho dentro do container onde o volume será montado
 
 nodeSelector: {}
 
