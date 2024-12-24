@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamlit-service  # Nome do Service
+  labels:
+    app: streamlit
+spec:
+  selector:
+    app: streamlit  # Conecta com o Deployment usando o mesmo label
+  ports:
+    - protocol: TCP
+      port: 80  # Porta interna exposta pelo Service
+      targetPort: 8501  # Porta no contêiner
+  type: ClusterIP  # Tipo de Service (ClusterIP é padrão)

@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 import numpy as np
 import uuid
+from filelock import FileLock
 
 # Configuração do RabbitMQ
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq.steam.svc.cluster.local')
@@ -18,8 +19,9 @@ RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', '123456789')
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Caminho do arquivo JSON e tamanho do lote
+# Caminho do arquivo JSON, tamanho do lote e lock
 OUTPUT_FILE = "/data/result.json"  # Caminho ajustado para salvar em /data dentro do container
+LOCK_FILE = "/data/result.lock"   # Caminho do arquivo de lock
 BATCH_SIZE = 60
 
 def connect_to_rabbitmq():
@@ -65,41 +67,47 @@ def detectar_outliers(temperaturas, lote_id, sensor):
 
 def salvar_mensagens_em_json(dados_agrupados, lote_id):
     Path("/data").mkdir(parents=True, exist_ok=True)
-    
-    # Lê os dados existentes, se houver
-    if Path(OUTPUT_FILE).exists():
-        with open(OUTPUT_FILE, "r") as f:
-            resultados = json.load(f)
-    else:
-        resultados = {}
+    lock = FileLock(LOCK_FILE)
 
-    # Adiciona o novo lote ao arquivo existente
-    lote_key = f"lote_{lote_id}"
-    resultados[lote_key] = {}
+    with lock:
+        # Lê os dados existentes, se houver
+        if Path(OUTPUT_FILE).exists():
+            try:
+                with open(OUTPUT_FILE, "r") as f:
+                    resultados = json.load(f)
+            except json.JSONDecodeError:
+                logger.error(f"Arquivo {OUTPUT_FILE} está corrompido. Criando um novo arquivo.")
+                resultados = {}
+        else:
+            resultados = {}
 
-    for sensor, data in dados_agrupados.items():
-        temperaturas = data["temperaturas"][:BATCH_SIZE]
-        temperaturas_numeradas = {
-            idx: temp for idx, temp in enumerate(temperaturas)
-        }
-        media = round(sum(temperaturas) / len(temperaturas), 2) if temperaturas else 0
-        temp_min = min(temperaturas) if temperaturas else None
-        temp_max = max(temperaturas) if temperaturas else None
+        # Adiciona o novo lote ao arquivo existente
+        lote_key = f"lote_{lote_id}"
+        resultados[lote_key] = {}
 
-        # Detecta outliers
-        outliers = detectar_outliers(temperaturas, lote_id, sensor)
+        for sensor, data in dados_agrupados.items():
+            temperaturas = data["temperaturas"][:BATCH_SIZE]
+            temperaturas_numeradas = {
+                idx: temp for idx, temp in enumerate(temperaturas)
+            }
+            media = round(sum(temperaturas) / len(temperaturas), 2) if temperaturas else 0
+            temp_min = min(temperaturas) if temperaturas else None
+            temp_max = max(temperaturas) if temperaturas else None
 
-        resultados[lote_key][sensor] = {
-            "media": media,
-            "minima": temp_min,
-            "maxima": temp_max,
-            "temperaturas": temperaturas_numeradas,
-            "outliers": outliers
-        }
+            # Detecta outliers
+            outliers = detectar_outliers(temperaturas, lote_id, sensor)
 
-    # Salva os dados atualizados no diretório /data dentro do container
-    with open(OUTPUT_FILE, "w") as f:
-        json.dump(resultados, f, indent=4)
+            resultados[lote_key][sensor] = {
+                "media": media,
+                "minima": temp_min,
+                "maxima": temp_max,
+                "temperaturas": temperaturas_numeradas,
+                "outliers": outliers
+            }
+
+        # Salva os dados atualizados no diretório /data dentro do container
+        with open(OUTPUT_FILE, "w") as f:
+            json.dump(resultados, f, indent=4)
 
 def processar_lote(channel):
     mensagens = []

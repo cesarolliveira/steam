@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: streamlit-ingress  # Nome do Ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web  # Configura o entrypoint do Traefik (porta 80 padrão)
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: streamlit.local  # Domínio para acessar o serviço
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: streamlit-service  # Nome do Service
+            port:
+              number: 80  # Porta do Service
