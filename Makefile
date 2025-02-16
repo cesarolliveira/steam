@@ -143,15 +143,11 @@ build-streamlit:
 	docker buildx create --use
 	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target streamlit --tag manoelpg/streamlit:v1.0 --push .
 
-destroy-producer-cronjob:
-	@if [ -n "$$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer")" ]; then \
-		kubectl delete job.batch -n default $$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer"); \
-	else \
-		echo "No jobs found matching 'manual-import-producer'"; \
-	fi
+start-producer-temperature:
+	kubectl apply -f resources/producer/deployment.yaml
 
-execute-producer-cronjob:
-	kubectl create job manual-import-producer --image manoelpg/producer:v1.0
+stop-producer-temperature:
+	kubectl delete -f resources/producer/deployment.yaml
 
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image
