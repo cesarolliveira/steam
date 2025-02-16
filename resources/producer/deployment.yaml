@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: producer  # Nome do contêiner
-        image: luisfeliphe66/producer:latest  # Imagem Docker do serviço
+        image: manoelpg/producer:v1.0  # Imagem Docker do serviço
         env:
         - name: RABBITMQ_HOST
           value: "rabbitmq"  # Endereço do RabbitMQ dentro do cluster Kubernetes

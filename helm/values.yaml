@@ -5,6 +5,13 @@
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
 replicaCount: 1
 
+image:
+  repository: manoelpg/consumer
+  # This sets the pull policy for images.
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v1.0"
+
 # This is for the secretes for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
 # This is to override the chart name.
@@ -100,7 +107,7 @@ volume:
   enabled: true
   name: data-volume
   type: hostPath
-  path: /home/luisfeliphe/projetos/steam/data  # Caminho no nó onde o volume será montado
+  path: /root/steam/data  # Caminho no nó onde o volume será montado
   mountPath: /data  # Caminho dentro do container onde o volume será montado
 
 nodeSelector: {}

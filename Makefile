@@ -132,22 +132,26 @@ log:
 	docker compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
 
 build-consumer:
-	docker build --file Dockerfile --no-cache --target consumer --tag luisfeliphe66/consumer:v1.0 .
-	docker push luisfeliphe66/consumer:v1.0
+	docker buildx create --use
+	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target consumer --tag manoelpg/consumer:v1.0 --push .
 
 build-producer:
-	docker build --file Dockerfile --no-cache --target producer --tag luisfeliphe66/producer:v1.0 .
-	docker push luisfeliphe66/producer:v1.0
+	docker buildx create --use
+	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target producer --tag manoelpg/producer:v1.0 --push .
 
-delete-jobs:
+build-streamlit:
+	docker buildx create --use
+	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target streamlit --tag manoelpg/streamlit:v1.0 --push .
+
+destroy-producer-cronjob:
 	@if [ -n "$$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer")" ]; then \
 		kubectl delete job.batch -n default $$(kubectl get job.batch -n default --no-headers -o custom-columns=":metadata.name" | grep "^manual-import-producer"); \
 	else \
 		echo "No jobs found matching 'manual-import-producer'"; \
 	fi
 
-create-cronjob:
-	kubectl create job manual-import-producer --image luisfeliphe66/producer:v1.0
+execute-producer-cronjob:
+	kubectl create job manual-import-producer --image manoelpg/producer:v1.0
 
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image

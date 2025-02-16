@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: streamlit  # Nome do contêiner
-        image: luisfeliphe66/streamlit:v2.0  # Imagem Docker do serviço
+        image: manoelpg/streamlit:v1.0  # Imagem Docker do serviço
         imagePullPolicy: Always  # Garante que a imagem seja sempre baixada
         volumeMounts:
         - name: host-volume  # Nome do volume
@@ -22,5 +22,5 @@ spec:
       volumes:
       - name: host-volume  # Nome do volume
         hostPath:
-          path: /home/manoelgomes/steam/data  # Caminho absoluto no host
+          path: /root/steam/data  # Caminho absoluto no host
           type: Directory  # Tipo do volume (pode ser Directory, DirectoryOrCreate, etc.)

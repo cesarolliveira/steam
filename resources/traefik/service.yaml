@@ -1,0 +1,33 @@
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: traefik
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2025-02-12T00:08:55Z"
+  finalizers:
+  - service.kubernetes.io/load-balancer-cleanup
+  labels:
+    app.kubernetes.io/instance: traefik-kube-system
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: traefik
+    helm.sh/chart: traefik-27.0.201_up27.0.2
+  name: traefik
+  namespace: kube-system
+  resourceVersion: "1289"
+  uid: 39170294-648b-4b99-b8c0-d240032f03ea
+spec:
+  allocateLoadBalancerNodePorts: true
+  clusterIP: 10.43.54.155
+  clusterIPs:
+  - 10.43.54.155
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: PreferDualStack
+  ports:
