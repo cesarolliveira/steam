@@ -13,7 +13,7 @@ from filelock import FileLock
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq.steam.svc.cluster.local')
 RABBITMQ_QUEUE = os.getenv('RABBITMQ_QUEUE', 'steam')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
-RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', '123456789')
+RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'steam@2025')
 
 # Configuração do logging
 logging.basicConfig(level=logging.DEBUG)
