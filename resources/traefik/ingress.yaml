@@ -12,7 +12,7 @@ metadata:
     # traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   rules:
-    - host: traefik.local
+    - host: traefik.steam
       http:
         paths:
           - path: /
