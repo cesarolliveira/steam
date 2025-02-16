@@ -2,6 +2,13 @@ ARG PYTHON_VERSION=3.9-slim
 
 # Usa uma imagem Python como base
 FROM python:${PYTHON_VERSION} AS consumer
+
+ENV RABBITMQ_HOST=rabbitmq.steam.svc.cluster.local \
+    RABBITMQ_PORT=5672 \
+    RABBITMQ_USER=user \
+    RABBITMQ_PASS=steam@2025 \
+    RABBITMQ_QUEUE=steam
+
 WORKDIR /app
 
 COPY resources/consumer/requirements.txt /app/requirements.txt
@@ -14,6 +21,12 @@ CMD ["python", "consumer.py"]
 
 # Usa uma imagem Python como base
 FROM python:${PYTHON_VERSION} AS producer
+
+ENV RABBITMQ_HOST=rabbitmq.steam.svc.cluster.local \
+    RABBITMQ_PORT=5672 \
+    RABBITMQ_USER=user \
+    RABBITMQ_PASS=steam@2025 \
+    RABBITMQ_QUEUE=steam
 
 # Instala dependências
 RUN pip install pandas pika
