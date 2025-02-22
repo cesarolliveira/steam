@@ -20,11 +20,12 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Caminho do arquivo JSON, tamanho do lote e lock
-OUTPUT_FILE = "/data/result.json"  # Caminho ajustado para salvar em /data dentro do container
-LOCK_FILE = "/data/result.lock"   # Caminho do arquivo de lock
+OUTPUT_FILE = "/data/result.json"
+LOCK_FILE = "/data/result.lock"
 BATCH_SIZE = 60
 
 def connect_to_rabbitmq():
+    """Conecta ao RabbitMQ e declara a fila."""
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
     connection_params = pika.ConnectionParameters(
         host=RABBITMQ_HOST,
@@ -37,10 +38,7 @@ def connect_to_rabbitmq():
     return connection, channel
 
 def detectar_outliers(temperaturas, lote_id, sensor):
-    """
-    Detecta outliers em uma lista de temperaturas usando o método do intervalo interquartil (IQR).
-    Retorna um dicionário com os índices como chaves e os valores considerados outliers.
-    """
+    """Detecta outliers usando o método do intervalo interquartil (IQR)."""
     if not temperaturas:
         return {}
 
@@ -60,41 +58,33 @@ def detectar_outliers(temperaturas, lote_id, sensor):
         if temp < lim_inferior or temp > lim_superior
     }
 
-    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Temperaturas: {temperaturas}")
     logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Outliers Detectados: {outliers}")
-
     return outliers
 
 def salvar_mensagens_em_json(dados_agrupados, lote_id):
+    """Salva as mensagens processadas no arquivo JSON de forma segura."""
     Path("/data").mkdir(parents=True, exist_ok=True)
     lock = FileLock(LOCK_FILE)
 
     with lock:
-        # Lê os dados existentes, se houver
+        resultados = {}
+
         if Path(OUTPUT_FILE).exists():
             try:
                 with open(OUTPUT_FILE, "r") as f:
                     resultados = json.load(f)
-            except json.JSONDecodeError:
-                logger.error(f"Arquivo {OUTPUT_FILE} está corrompido. Criando um novo arquivo.")
-                resultados = {}
-        else:
-            resultados = {}
-
-        # Adiciona o novo lote ao arquivo existente
+            except (json.JSONDecodeError, IOError):
+                logger.error(f"Erro ao ler {OUTPUT_FILE}. Criando um novo arquivo.")
+        
         lote_key = f"lote_{lote_id}"
         resultados[lote_key] = {}
 
         for sensor, data in dados_agrupados.items():
             temperaturas = data["temperaturas"][:BATCH_SIZE]
-            temperaturas_numeradas = {
-                idx: temp for idx, temp in enumerate(temperaturas)
-            }
+            temperaturas_numeradas = {idx: temp for idx, temp in enumerate(temperaturas)}
             media = round(sum(temperaturas) / len(temperaturas), 2) if temperaturas else 0
             temp_min = min(temperaturas) if temperaturas else None
             temp_max = max(temperaturas) if temperaturas else None
-
-            # Detecta outliers
             outliers = detectar_outliers(temperaturas, lote_id, sensor)
 
             resultados[lote_key][sensor] = {
@@ -105,11 +95,15 @@ def salvar_mensagens_em_json(dados_agrupados, lote_id):
                 "outliers": outliers
             }
 
-        # Salva os dados atualizados no diretório /data dentro do container
-        with open(OUTPUT_FILE, "w") as f:
+        logger.info(f"Salvando lote {lote_id} no arquivo JSON.")
+        temp_output_file = f"{OUTPUT_FILE}.tmp"
+        with open(temp_output_file, "w") as f:
             json.dump(resultados, f, indent=4)
+        
+        os.replace(temp_output_file, OUTPUT_FILE)
 
 def processar_lote(channel):
+    """Processa um lote de mensagens do RabbitMQ."""
     mensagens = []
     for _ in range(BATCH_SIZE):
         method_frame, properties, body = channel.basic_get(queue=RABBITMQ_QUEUE, auto_ack=False)
@@ -121,7 +115,7 @@ def processar_lote(channel):
             break
 
     if mensagens:
-        # Agrupa mensagens por sensor
+        logger.info(f"Processando {len(mensagens)} mensagens.")
         dados_agrupados = {}
         for mensagem in mensagens:
             for sensor_temperaturas, temperaturas_str in mensagem.items():
@@ -137,7 +131,6 @@ def processar_lote(channel):
                     except ValueError:
                         continue
 
-        # Define o ID do lote como o timestamp formatado + UUID curto
         lote_id = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{uuid.uuid4().hex[:8]}"
         salvar_mensagens_em_json(dados_agrupados, lote_id)
 
@@ -150,4 +143,5 @@ try:
 except KeyboardInterrupt:
     logger.info("Interrompido pelo usuário.")
 finally:
+    logger.info("Fechando conexão com RabbitMQ.")
     connection.close()
