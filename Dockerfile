@@ -22,23 +22,16 @@ CMD ["python", "consumer.py"]
 # Usa uma imagem Python como base
 FROM python:${PYTHON_VERSION} AS producer
 
-ENV RABBITMQ_HOST=rabbitmq.steam.svc.cluster.local \
-    RABBITMQ_PORT=5672 \
-    RABBITMQ_USER=user \
-    RABBITMQ_PASS=steam@2025 \
-    RABBITMQ_QUEUE=steam
-
 # Instala dependências
-RUN pip install pandas pika
+RUN pip install pika
 
 # Copia o código e o arquivo CSV para o contêiner
 COPY resources/producer/producer.py /app/producer.py
-COPY temperature.csv /dados.csv
 
 WORKDIR /app
 
 # Comando para executar o serviço
-CMD ["python", "producer.py", "echo 'Processo finalizado'"]
+CMD ["python", "producer.py"]
 
 # Base Image
 FROM python:${PYTHON_VERSION} AS streamlit
