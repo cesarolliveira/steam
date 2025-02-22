@@ -149,6 +149,11 @@ start-producer:
 stop-producer:
 	kubectl delete -f resources/producer/deployment.yaml
 
+start-streamlit:
+	kubectl apply -f resources/streamlit/deployment.yaml
+	kubectl apply -f resources/streamlit/service.yaml
+	kubectl apply -f resources/streamlit/ingress.yaml
+
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image
 

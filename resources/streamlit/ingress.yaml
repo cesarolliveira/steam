@@ -2,12 +2,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: streamlit-ingress  # Nome do Ingress
+  namespace: steam  # Namespace onde o Deployment será criado
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web  # Configura o entrypoint do Traefik (porta 80 padrão)
 spec:
   ingressClassName: traefik
   rules:
-  - host: streamlit.local  # Domínio para acessar o serviço
+  - host: streamlit.steam  # Domínio para acessar o serviço
     http:
       paths:
       - path: /

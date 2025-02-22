@@ -37,12 +37,11 @@ FROM python:${PYTHON_VERSION} AS streamlit
 
 WORKDIR /app
 
-COPY resources/streamlit/app.py ./
-COPY data/result.json ./
+COPY resources/streamlit/app.py /app/app.py
+COPY resources/streamlit/requirements.txt /app/requirements.txt
+COPY data/result.json /app/data/result.json
 
-RUN pip install streamlit pandas
-RUN pip install streamlit matplotlib
-RUN pip install streamlit seaborn
+RUN pip install -r requirements.txt
 
 EXPOSE 8501
 
