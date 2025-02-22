@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: producer  # Nome do Deployment para fácil identificação no cluster
+  namespace: steam  # Namespace onde o Deployment será criado
 spec:
   replicas: 1  # Define a quantidade de réplicas do serviço, aqui é apenas 1
   selector:
