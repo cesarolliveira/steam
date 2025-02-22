@@ -112,3 +112,12 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+rabbitmq:
+  host: rabbitmq.steam.svc.cluster.local
+  user: user
+  password: steam@2025
+  port: 5672
+  queue: steam
+  apiPort: 15672
+  

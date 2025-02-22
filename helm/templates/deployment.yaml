@@ -50,6 +50,8 @@ spec:
             value: "{{ .Values.rabbitmq.password }}"
           - name: "RABBITMQ_QUEUE"
             value: "{{ .Values.rabbitmq.queue }}"
+          - name: "RABBITMQ_API_PORT"
+            value: "{{ .Values.rabbitmq.apiPort }}"          
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
