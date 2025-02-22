@@ -143,10 +143,10 @@ build-streamlit:
 	docker buildx create --use
 	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target streamlit --tag manoelpg/streamlit:v1.0 --push .
 
-start-producer-temperature:
+start-producer:
 	kubectl apply -f resources/producer/deployment.yaml
 
-stop-producer-temperature:
+stop-producer:
 	kubectl delete -f resources/producer/deployment.yaml
 
 # Docker targets:
