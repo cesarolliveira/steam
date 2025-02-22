@@ -56,7 +56,6 @@ def conectar_rabbitmq():
                 durable=True,
                 arguments={
                     'x-queue-mode': 'lazy',
-                    'x-max-length': 10000
                 }
             )
         
