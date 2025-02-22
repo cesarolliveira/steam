@@ -82,14 +82,11 @@ livenessProbe: # Verifica se o container está saudável
   initialDelaySeconds: 30
   periodSeconds: 60
 
-readinessProbe: {}
-  # exec:
-  #   command:
-  #   - cat
-  #   - /tmp/healthy
-  # initialDelaySeconds: 5
-  # periodSeconds: 5
-  
+readinessProbe: # Verifica se o container está pronto para receber tráfego
+  httpGet:
+    path: /
+    port: 80
+
 #This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
   enabled: true
