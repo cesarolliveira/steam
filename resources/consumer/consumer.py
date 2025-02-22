@@ -22,6 +22,12 @@ OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
 LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
 
+# Parâmetros de Detecção de Outliers
+OUTLIER_METHOD = os.getenv('OUTLIER_METHOD', 'iqr')  # combined, iqr, zscore, mad
+IQR_MULTIPLIER = float(os.getenv('IQR_MULTIPLIER', 1.5))
+ZSCORE_THRESHOLD = float(os.getenv('ZSCORE_THRESHOLD', 3.0))
+MAD_THRESHOLD = float(os.getenv('MAD_THRESHOLD', 3.5))
+
 # Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
@@ -81,18 +87,40 @@ def calculate_statistics(readings):
     """Calcula estatísticas para um conjunto de leituras"""
     try:
         arr = np.array(readings)
-        return {
+        stats = {
             'mean': round(float(np.mean(arr)), 2),
+            'median': round(float(np.median(arr)), 2),
             'min': round(float(np.min(arr)), 2),
             'max': round(float(np.max(arr)), 2),
             'std_dev': round(float(np.std(arr)), 2),
-            'outliers': detect_outliers(readings)
+            'q1': round(float(np.percentile(arr, 25)), 2),
+            'q3': round(float(np.percentile(arr, 75)), 2)
         }
+
+        # Detecção de Outliers
+        outliers = {
+            'iqr': detect_outliers_iqr(readings),
+            'zscore': detect_outliers_zscore(readings),
+            'mad': detect_outliers_mad(readings)
+        }
+
+        # Combina resultados conforme método selecionado
+        if OUTLIER_METHOD == 'combined':
+            combined = {}
+            for method in ['iqr', 'zscore', 'mad']:
+                combined.update(outliers[method])
+            stats['outliers'] = combined
+        else:
+            stats['outliers'] = outliers.get(OUTLIER_METHOD, {})
+
+        stats['total_outliers'] = len(stats['outliers'])
+        return stats
+
     except Exception as e:
         logger.error(f"Erro no cálculo estatístico: {str(e)}")
         return {}
 
-def detect_outliers(readings):
+def detect_outliers_iqr(readings):
     """Detecta outliers usando o método IQR"""
     try:
         if len(readings) < 4:
@@ -102,8 +130,8 @@ def detect_outliers(readings):
         q3 = np.percentile(readings, 75)
         iqr = q3 - q1
         
-        lower = q1 - 1.5 * iqr
-        upper = q3 + 1.5 * iqr
+        lower = q1 - (IQR_MULTIPLIER * iqr)
+        upper = q3 + (IQR_MULTIPLIER * iqr)
         
         return {
             str(idx): temp
@@ -111,7 +139,44 @@ def detect_outliers(readings):
             if temp < lower or temp > upper
         }
     except Exception as e:
-        logger.error(f"Erro na detecção de outliers: {str(e)}")
+        logger.error(f"Erro no IQR: {str(e)}")
+        return {}
+
+def detect_outliers_zscore(readings):
+    """Detecta outliers usando Z-Score"""
+    try:
+        if len(readings) < 4:
+            return {}
+            
+        z_scores = (readings - np.mean(readings)) / np.std(readings)
+        return {
+            str(idx): temp
+            for idx, (temp, z) in enumerate(zip(readings, z_scores))
+            if abs(z) > ZSCORE_THRESHOLD
+        }
+    except Exception as e:
+        logger.error(f"Erro no Z-Score: {str(e)}")
+        return {}
+
+def detect_outliers_mad(readings):
+    """Detecta outliers usando Median Absolute Deviation (MAD)"""
+    try:
+        if len(readings) < 4:
+            return {}
+            
+        median = np.median(readings)
+        mad = np.median(np.abs(readings - median))
+        if mad == 0:
+            return {}
+            
+        modified_z = 0.6745 * (readings - median) / mad
+        return {
+            str(idx): temp
+            for idx, (temp, z) in enumerate(zip(readings, modified_z))
+            if abs(z) > MAD_THRESHOLD
+        }
+    except Exception as e:
+        logger.error(f"Erro no MAD: {str(e)}")
         return {}
 
 # ==============================================
@@ -139,8 +204,13 @@ def save_results(sensor, stats):
                 
             data[sensor][batch_id] = {
                 **stats,
-                'processing_time': datetime.now().isoformat(), # Data e hora do processamento
-                'total_outliers': len(stats.get('outliers', {})) # Número de outliers
+                'processing_time': datetime.now().isoformat(),
+                'outlier_method': OUTLIER_METHOD,
+                'outlier_params': {
+                    'iqr_multiplier': IQR_MULTIPLIER,
+                    'zscore_threshold': ZSCORE_THRESHOLD,
+                    'mad_threshold': MAD_THRESHOLD
+                }
             }
             
             # Write to temporary file first
