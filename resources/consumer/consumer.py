@@ -2,146 +2,252 @@ import pika
 import os
 import json
 import logging
-from pathlib import Path
 import time
-from datetime import datetime
+import requests
 import numpy as np
 import uuid
+from datetime import datetime
+from pathlib import Path
 from filelock import FileLock
 
-# Configuração do RabbitMQ
+# ==============================================
+# CONFIGURAÇÕES GLOBAIS (variáveis de ambiente)
+# ==============================================
 RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq.steam.svc.cluster.local')
-RABBITMQ_QUEUE = os.getenv('RABBITMQ_QUEUE', 'steam')
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'steam@2025')
+QUEUE_PREFIX = os.getenv('QUEUE_PREFIX', 'steam.TEMP_')
+RABBITMQ_API_PORT = os.getenv('RABBITMQ_API_PORT', '15672')
+OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
+LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
 
-# Configuração do logging
-logging.basicConfig(level=logging.DEBUG)
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(OUTPUT_DIR, 'consumer.log'))
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Caminho do arquivo JSON, tamanho do lote e lock
-OUTPUT_FILE = "/data/result.json"
-LOCK_FILE = "/data/result.lock"
-BATCH_SIZE = 60
+# ==============================================
+# FUNÇÕES AUXILIARES
+# ==============================================
+def get_rabbitmq_queues():
+    """Obtém lista de filas usando a API de gerenciamento do RabbitMQ"""
+    try:
+        response = requests.get(
+            f'http://{RABBITMQ_HOST}:{RABBITMQ_API_PORT}/api/queues',
+            auth=(RABBITMQ_USER, RABBITMQ_PASS),
+            timeout=10
+        )
+        response.raise_for_status()
+        return [queue['name'] for queue in response.json()]
+    except Exception as e:
+        logger.error(f"Erro ao obter filas: {str(e)}")
+        return []
 
-def connect_to_rabbitmq():
-    """Conecta ao RabbitMQ e declara a fila."""
-    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
-    connection_params = pika.ConnectionParameters(
-        host=RABBITMQ_HOST,
-        port=5672,
-        credentials=credentials
-    )
-    connection = pika.BlockingConnection(connection_params)
-    channel = connection.channel()
-    channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
-    return connection, channel
+def filter_queues(queues, prefix):
+    """Filtra filas pelo prefixo especificado"""
+    return [q for q in queues if q.startswith(prefix)]
 
-def detectar_outliers(temperaturas, lote_id, sensor):
-    """Detecta outliers usando o método do intervalo interquartil (IQR)."""
-    if not temperaturas:
+def setup_queues(channel, queues):
+    """Configura o consumo para as filas especificadas"""
+    for queue in queues:
+        try:
+            channel.queue_declare(
+                queue=queue,
+                durable=True,
+                passive=True  # Apenas verifica se a fila existe
+            )
+            channel.basic_consume(
+                queue=queue,
+                on_message_callback=process_message,
+                auto_ack=False
+            )
+            logger.info(f"Registrado na fila: {queue}")
+        except pika.exceptions.ChannelClosedByBroker as e:
+            logger.error(f"Erro na fila {queue}: {str(e)}")
+        except Exception as e:
+            logger.error(f"Erro inesperado: {str(e)}")
+
+# ==============================================
+# FUNÇÕES DE PROCESSAMENTO DE DADOS
+# ==============================================
+def calculate_statistics(readings):
+    """Calcula estatísticas para um conjunto de leituras"""
+    try:
+        arr = np.array(readings)
+        return {
+            'mean': round(float(np.mean(arr)), 2),
+            'min': round(float(np.min(arr)), 2),
+            'max': round(float(np.max(arr)), 2),
+            'std_dev': round(float(np.std(arr)), 2),
+            'outliers': detect_outliers(readings)
+        }
+    except Exception as e:
+        logger.error(f"Erro no cálculo estatístico: {str(e)}")
         return {}
 
-    q1 = np.percentile(temperaturas, 25)
-    q3 = np.percentile(temperaturas, 75)
-    iqr = q3 - q1
-
-    lim_inferior = q1 - 1.5 * iqr
-    lim_superior = q3 + 1.5 * iqr
-
-    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Q1: {q1}, Q3: {q3}, IQR: {iqr}")
-    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Limite Inferior: {lim_inferior}, Limite Superior: {lim_superior}")
-
-    outliers = {
-        idx: temp
-        for idx, temp in enumerate(temperaturas)
-        if temp < lim_inferior or temp > lim_superior
-    }
-
-    logger.debug(f"Lote: {lote_id}, Sensor: {sensor}, Outliers Detectados: {outliers}")
-    return outliers
-
-def salvar_mensagens_em_json(dados_agrupados, lote_id):
-    """Salva as mensagens processadas no arquivo JSON de forma segura."""
-    Path("/data").mkdir(parents=True, exist_ok=True)
-    lock = FileLock(LOCK_FILE)
-
-    with lock:
-        resultados = {}
-
-        if Path(OUTPUT_FILE).exists():
-            try:
-                with open(OUTPUT_FILE, "r") as f:
-                    resultados = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                logger.error(f"Erro ao ler {OUTPUT_FILE}. Criando um novo arquivo.")
+def detect_outliers(readings):
+    """Detecta outliers usando o método IQR"""
+    try:
+        if len(readings) < 4:
+            return {}
+            
+        q1 = np.percentile(readings, 25)
+        q3 = np.percentile(readings, 75)
+        iqr = q3 - q1
         
-        lote_key = f"lote_{lote_id}"
-        resultados[lote_key] = {}
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        
+        return {
+            str(idx): temp
+            for idx, temp in enumerate(readings)
+            if temp < lower or temp > upper
+        }
+    except Exception as e:
+        logger.error(f"Erro na detecção de outliers: {str(e)}")
+        return {}
 
-        for sensor, data in dados_agrupados.items():
-            temperaturas = data["temperaturas"][:BATCH_SIZE]
-            temperaturas_numeradas = {idx: temp for idx, temp in enumerate(temperaturas)}
-            media = round(sum(temperaturas) / len(temperaturas), 2) if temperaturas else 0
-            temp_min = min(temperaturas) if temperaturas else None
-            temp_max = max(temperaturas) if temperaturas else None
-            outliers = detectar_outliers(temperaturas, lote_id, sensor)
-
-            resultados[lote_key][sensor] = {
-                "media": media,
-                "minima": temp_min,
-                "maxima": temp_max,
-                "temperaturas": temperaturas_numeradas,
-                "outliers": outliers
+# ==============================================
+# GERENCIAMENTO DE ARQUIVOS
+# ==============================================
+def save_results(sensor, stats):
+    """Salva resultados no arquivo JSON com lock"""
+    try:
+        Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+        lock = FileLock(LOCK_FILE, timeout=60)
+        
+        with lock:
+            # Carrega dados existentes
+            data = {}
+            if Path(OUTPUT_FILE).exists():
+                with open(OUTPUT_FILE, 'r') as f:
+                    data = json.load(f)
+            
+            # Gera ID único para o lote
+            batch_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+            
+            # Estrutura de armazenamento
+            if sensor not in data:
+                data[sensor] = {}
+                
+            data[sensor][batch_id] = {
+                **stats,
+                'processing_time': datetime.now().isoformat(), # Data e hora do processamento
+                'total_outliers': len(stats.get('outliers', {})) # Número de outliers
             }
+            
+            # Write to temporary file first
+            temp_file = f"{OUTPUT_FILE}.tmp"
+            with open(temp_file, 'w') as f:
+                json.dump(data, f, indent=2)
+                
+            # Atomic replace
+            os.replace(temp_file, OUTPUT_FILE)
+            logger.info(f"Dados salvos para {sensor} | Lote: {batch_id}")
+            
+    except Exception as e:
+        logger.error(f"Erro ao salvar dados: {str(e)}")
+        raise
 
-        logger.info(f"Salvando lote {lote_id} no arquivo JSON.")
-        temp_output_file = f"{OUTPUT_FILE}.tmp"
-        with open(temp_output_file, "w") as f:
-            json.dump(resultados, f, indent=4)
+# ==============================================
+# CONEXÃO E PROCESSAMENTO DE MENSAGENS
+# ==============================================
+def process_message(channel, method, properties, body):
+    """Processa cada mensagem recebida"""
+    try:
+        # Decodifica a mensagem
+        message = json.loads(body.decode())
+        sensor = message.get('sensor', 'unknown')
+        readings = message.get('leituras', [])
         
-        os.replace(temp_output_file, OUTPUT_FILE)
+        if not readings:
+            raise ValueError("Mensagem sem dados de leitura")
+            
+        logger.debug(f"Processando {len(readings)} leituras de {sensor}")
+        
+        # Calcula estatísticas
+        stats = calculate_statistics(readings)
+        
+        # Salva resultados
+        save_results(sensor, stats)
+        
+        # Confirma o processamento
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        
+    except json.JSONDecodeError:
+        logger.error("Mensagem com formato inválido")
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    except Exception as e:
+        logger.error(f"Erro no processamento: {str(e)}")
+        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
-def processar_lote(channel):
-    """Processa um lote de mensagens do RabbitMQ."""
-    mensagens = []
-    for _ in range(BATCH_SIZE):
-        method_frame, properties, body = channel.basic_get(queue=RABBITMQ_QUEUE, auto_ack=False)
-        if method_frame:
-            message = json.loads(body.decode())
-            mensagens.append(message)
-            channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-        else:
-            break
+def setup_connection():
+    """Configura a conexão com o RabbitMQ"""
+    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+    parameters = pika.ConnectionParameters(
+        host=RABBITMQ_HOST,
+        credentials=credentials,
+        connection_attempts=3,
+        retry_delay=10,
+        heartbeat=30
+    )
+    
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+    channel.basic_qos(prefetch_count=20)
+    return connection, channel
 
-    if mensagens:
-        logger.info(f"Processando {len(mensagens)} mensagens.")
-        dados_agrupados = {}
-        for mensagem in mensagens:
-            for sensor_temperaturas, temperaturas_str in mensagem.items():
-                sensores = sensor_temperaturas.split(';')
-                temperaturas = temperaturas_str.split(';')
-
-                for sensor, temp_str in zip(sensores, temperaturas):
-                    if sensor not in dados_agrupados:
-                        dados_agrupados[sensor] = {"temperaturas": []}
-                    try:
-                        temperatura = float(temp_str)
-                        dados_agrupados[sensor]["temperaturas"].append(temperatura)
-                    except ValueError:
-                        continue
-
-        lote_id = f"{datetime.now().strftime('%Y-%m-%d_%H-%M')}_{uuid.uuid4().hex[:8]}"
-        salvar_mensagens_em_json(dados_agrupados, lote_id)
-
-connection, channel = connect_to_rabbitmq()
-
-try:
+def main_loop():
+    """Loop principal de execução"""
+    logger.info(f"""
+    Iniciando Consumer com configuração:
+    - Host RabbitMQ: {RABBITMQ_HOST}
+    - Prefixo das filas: {QUEUE_PREFIX}
+    - Arquivo de saída: {OUTPUT_FILE}
+    """)
+    
     while True:
-        processar_lote(channel)
-        time.sleep(2)
-except KeyboardInterrupt:
-    logger.info("Interrompido pelo usuário.")
-finally:
-    logger.info("Fechando conexão com RabbitMQ.")
-    connection.close()
+        connection = None
+        try:
+            # Estabelece conexão
+            connection, channel = setup_connection()
+            
+            # Descobre e configura filas dinamicamente
+            all_queues = get_rabbitmq_queues()
+            target_queues = filter_queues(all_queues, QUEUE_PREFIX)
+            
+            if not target_queues:
+                logger.warning("Nenhuma fila encontrada. Verifique o prefixo.")
+                time.sleep(30)
+                continue
+                
+            setup_queues(channel, target_queues)
+            logger.info(f"Monitorando {len(target_queues)} fila(s)")
+            
+            # Inicia o consumo de mensagens
+            channel.start_consuming()
+            
+        except pika.exceptions.AMQPConnectionError:
+            logger.error("Conexão perdida. Reconectando em 30 segundos...")
+            time.sleep(30)
+        except KeyboardInterrupt:
+            logger.info("Encerramento solicitado pelo usuário")
+            break
+        except Exception as e:
+            logger.error(f"Erro não tratado: {str(e)}")
+            time.sleep(10)
+        finally:
+            if connection and connection.is_open:
+                connection.close()
+
+if __name__ == "__main__":
+    # Verifica/Cria diretório de saída
+    Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    main_loop()
