@@ -73,14 +73,23 @@ ingress:
   #      - chart-example.local
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-# livenessProbe:
-#   httpGet:
-#     path: /
-#     port: http
-# readinessProbe:
-#   httpGet:
-#     path: /
-#     port: http
+livenessProbe:
+  exec:
+    command:
+    - sh
+    - -c
+    - test -f /data/result.json
+  initialDelaySeconds: 30
+  periodSeconds: 60
+
+readinessProbe:
+  exec:
+    command:
+    - sh
+    - -c
+    - netstat -tuln | grep 5672
+  initialDelaySeconds: 10
+  periodSeconds: 15
 
 #This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
