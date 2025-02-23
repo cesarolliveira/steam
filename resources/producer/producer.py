@@ -15,9 +15,9 @@ RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'steam@2025')
 
 
 NUM_SENSORES = int(os.getenv('NUM_SENSORES', 5))            # Quantidade de sensores
-INTERVALO_COLETA = int(os.getenv('INTERVALO_COLETA', 1))     # Intervalo em segundos
-TEMPERATURA_MIN = int(os.getenv('TEMPERATURA_MIN', -5))      # Mínimo de temperatura
-TEMPERATURA_MAX = int(os.getenv('TEMPERATURA_MAX', 100))     # Máximo de temperatura
+INTERVALO_COLETA = int(os.getenv('INTERVALO_COLETA', 1))    # Intervalo em segundos
+TEMPERATURA_MIN = int(os.getenv('TEMPERATURA_MIN', 30))     # Mínimo de temperatura
+TEMPERATURA_MAX = int(os.getenv('TEMPERATURA_MAX', 90))     # Máximo de temperatura
 NUM_LEITURAS = 60                                           # Leituras por intervalo
 
 # Gera lista dinâmica de sensores
