@@ -118,11 +118,11 @@ start-consumer:
 	@if [ -z "${environment}" ]; then \
 		echo "Variável environment não definida, opções: vps ou rasp-berry."; \
 		exit 1; \
-	if [ ! -d "/root/steam/data" ]; then \
+	fi
+	@if [ ! -d "/root/steam/data" ]; then \
 		echo "Pasta /root/steam/data não existe, criando."; \
 		mkdir -p /root/steam/data; \
-		exit 1; \
-	fi	
+	fi
 	helm upgrade --install --create-namespace --namespace steam consumer ./helm -f helm/values.yaml -f helm/environment/${environment}.yaml
 
 stop-consumer:
