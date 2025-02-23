@@ -3,8 +3,7 @@ import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
-import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configuração da página
 st.set_page_config(
@@ -14,6 +13,17 @@ st.set_page_config(
 )
 
 caminho_arquivo = "/app/data/result.json"
+
+# Variável para definir a quantidade de lotes para média histórica
+NUM_LOTES_HISTORICO = 30
+
+# Definição de intervalos de tempo para filtro
+INTERVALOS_TEMPO = {
+    "Últimos 30 segundos": timedelta(seconds=30),
+    "Últimos 1 minuto": timedelta(minutes=1),
+    "Últimos 3 minutos": timedelta(minutes=3),
+    "Últimos 5 minutos": timedelta(minutes=5)
+}
 
 def carregar_dados_json(caminho_arquivo):
     """Carrega os dados do arquivo JSON com tratamento de erros"""
@@ -31,78 +41,71 @@ def processar_dados(data):
     
     for sensor, batches in data.items():
         for batch_id, stats in batches.items():
-            # Parse da data do batch_id (formato: %Y%m%d%H%M%S)
-            timestamp = datetime.strptime(batch_id.split('_')[0], "%Y%m%d%H%M%S")
-            
-            processed.append({
-                "sensor": sensor,
-                "batch_id": batch_id,
-                "timestamp": timestamp,
-                "mean": stats['mean'],
-                "median": stats['median'],
-                "min": stats['min'],
-                "max": stats['max'],
-                "std_dev": stats['std_dev'],
-                "q1": stats['q1'],
-                "q3": stats['q3'],
-                "total_outliers": stats['total_outliers'],
-                "outlier_method": stats['outlier_method'],
-                "processing_time": stats['processing_time']
-            })
+            try:
+                timestamp = datetime.strptime(batch_id.split('_')[0], "%Y%m%d%H%M%S")
+                
+                processed.append({
+                    "sensor": sensor,
+                    "batch_id": batch_id,
+                    "timestamp": timestamp,
+                    "mean": stats['mean'],
+                    "min": stats['min'],
+                    "max": stats['max'],
+                    "total_outliers": stats['total_outliers']
+                })
+            except KeyError as e:
+                st.warning(f"Campo faltando no lote {batch_id}: {e}")
     
-    return pd.DataFrame(processed)
+    df = pd.DataFrame(processed)
+    if not df.empty:
+        df['mean_historica'] = df['mean'].rolling(NUM_LOTES_HISTORICO, min_periods=1).mean()
+        df['std_historico'] = df['mean'].rolling(NUM_LOTES_HISTORICO, min_periods=1).std()
+        df['lower_bound'] = df['mean_historica'] - df['std_historico']
+        df['upper_bound'] = df['mean_historica'] + df['std_historico']
+        df['variacao'] = df['mean'].diff()
+    
+    return df
 
 def plot_series_temporais(df, sensor):
-    """Cria gráficos de série temporal para um sensor específico"""
+    """Cria gráficos de série temporal com destaque para outliers"""
     df_filtered = df[df['sensor'] == sensor].sort_values('timestamp')
     
-    fig, ax = plt.subplots(2, 1, figsize=(12, 10))
+    fig, ax = plt.subplots(figsize=(14, 6))
     
-    # Gráfico de Média com faixa de variação e quartis
-    sns.lineplot(data=df_filtered, x='timestamp', y='mean', ax=ax[0], label='Média', color='blue')
-    sns.lineplot(data=df_filtered, x='timestamp', y='q1', ax=ax[0], label='Q1', color='green', linestyle='--')
-    sns.lineplot(data=df_filtered, x='timestamp', y='q3', ax=ax[0], label='Q3', color='orange', linestyle='--')
+    # Gráfico Principal
+    sns.lineplot(data=df_filtered, x='timestamp', y='mean_historica', ax=ax, label='Média', color='blue')
+    sns.lineplot(data=df_filtered, x='timestamp', y='min', ax=ax, label='Mínima', color='green', linestyle='--')
+    sns.lineplot(data=df_filtered, x='timestamp', y='max', ax=ax, label='Máxima', color='red', linestyle='--')
+    ax.plot(df_filtered['timestamp'], df_filtered['lower_bound'], '--', color='gray', label='Limite Inferior')
+    ax.plot(df_filtered['timestamp'], df_filtered['upper_bound'], '--', color='gray', label='Limite Superior')
+    ax.fill_between(df_filtered['timestamp'], df_filtered['lower_bound'], df_filtered['upper_bound'], color='green', alpha=0.1)
     
-    ax[0].fill_between(df_filtered['timestamp'], 
-                      df_filtered['min'], 
-                      df_filtered['max'], 
-                      color='blue', alpha=0.1)
+    # Detecta e marca outliers
+    mask_outliers = (df_filtered['min'] < df_filtered['lower_bound']) | (df_filtered['max'] > df_filtered['upper_bound'])
+    sns.scatterplot(data=df_filtered[mask_outliers], x='timestamp', y='min', ax=ax, color='red', marker='X', s=100, label='Outliers')
+    sns.scatterplot(data=df_filtered[mask_outliers], x='timestamp', y='max', ax=ax, color='red', marker='X', s=100)
     
-    ax[0].set_title(f'Evolução Temporal - {sensor}')
-    ax[0].set_ylabel('Temperatura (°C)')
-    ax[0].legend(loc='upper left')
+    ax.set_title(f'Evolução Temporal - {sensor}')
+    ax.set_ylabel('Temperatura (°C)')
+    ax.legend(loc='upper left')
     
-    # Gráfico de Outliers
-    sns.barplot(data=df_filtered, x='timestamp', y='total_outliers', ax=ax[1], color='red')
-    ax[1].set_title('Quantidade de Outliers por Lote')
-    ax[1].set_ylabel('Número de Outliers')
-    ax[1].tick_params(axis='x', rotation=45)
-    
+    plt.xticks(rotation=45)
     plt.tight_layout()
     return fig
 
-def exibir_detalhes_batch(batch_data):
-    """Exibe os detalhes estatísticos de um lote específico"""
-    st.subheader("Estatísticas Detalhadas")
-    cols = st.columns(4)
+def plot_variacao(df):
+    """Cria gráfico específico para variação da temperatura"""
+    fig, ax = plt.subplots(figsize=(14, 3))
     
-    with cols[0]:
-        st.metric("Média", f"{batch_data['mean']}°C")
-        st.metric("Mediana", f"{batch_data['median']}°C")
+    sns.lineplot(data=df, x='timestamp', y='variacao', ax=ax, color='purple')
+    ax.axhline(0, color='gray', linestyle='--')
+    ax.set_title('Variação da Temperatura ao Longo do Tempo')
+    ax.set_ylabel('Variação (°C)')
     
-    with cols[1]:
-        st.metric("Mínima", f"{batch_data['min']}°C")
-        st.metric("Máxima", f"{batch_data['max']}°C")
-    
-    with cols[2]:
-        st.metric("Desvio Padrão", f"{batch_data['std_dev']}°C")
-        st.metric("Outliers", batch_data['total_outliers'])
-    
-    with cols[3]:
-        st.metric("Método de Detecção", batch_data['outlier_method'])
-        st.metric("Q1/Q3", f"{batch_data['q1']}°C / {batch_data['q3']}°C")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    return fig
 
-# Interface principal
 def main():
     st.title("Dashboard de Monitoramento Térmico")
     
@@ -119,44 +122,27 @@ def main():
         st.warning("Nenhum dado disponível para análise.")
         return
     
-    # Sidebar com controles
     with st.sidebar:
-        st.header("Filtros")
+        st.header("Controles")
+        sensor_selecionado = st.selectbox("Sensor", df['sensor'].unique())
+        data_selecionada = st.date_input("Data", df['timestamp'].max())
+        intervalo_tempo = st.selectbox("Período", list(INTERVALOS_TEMPO.keys()))
+    
+    tempo_limite = datetime.now() - INTERVALOS_TEMPO[intervalo_tempo]
+    
+    df_filtrado = df[
+        (df['sensor'] == sensor_selecionado) &
+        (df['timestamp'].dt.date == data_selecionada) &
+        (df['timestamp'] >= tempo_limite)
+    ]
+    
+    if not df_filtrado.empty:
+        st.pyplot(plot_series_temporais(df_filtrado, sensor_selecionado))
         
-        # Seletor de sensor
-        sensores = df['sensor'].unique()
-        sensor_selecionado = st.selectbox("Selecione o Sensor", sensores)
-        
-        # Seletor de período
-        datas = df['timestamp'].dt.date.unique()
-        data_selecionada = st.selectbox("Selecione a Data", datas)
-    
-    # Filtrar dados
-    df_filtrado = df[(df['sensor'] == sensor_selecionado) & 
-                    (df['timestamp'].dt.date == data_selecionada)]
-    
-    # Layout principal
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        # Gráfico de série temporal
-        st.pyplot(plot_series_temporais(df, sensor_selecionado))
-    
-    with col2:
-        # Último lote processado
-        ultimo_batch = df_filtrado.iloc[-1]
-        st.subheader("Último Lote Processado")
-        st.caption(f"ID: {ultimo_batch['batch_id']}")
-        st.metric("Temperatura Média", f"{ultimo_batch['mean']}°C")
-        st.metric("Outliers Detectados", ultimo_batch['total_outliers'])
-    
-    # Exibir detalhes do batch selecionado
-    batches_disponiveis = df_filtrado['batch_id'].tolist()
-    batch_selecionado = st.selectbox("Selecione um Lote para Detalhes", batches_disponiveis)
-    
-    if batch_selecionado:
-        batch_data = raw_data[sensor_selecionado][batch_selecionado]
-        exibir_detalhes_batch(batch_data)
+        st.subheader("Análise de Variação Térmica")
+        st.pyplot(plot_variacao(df_filtrado))
+    else:
+        st.warning("Nenhum dado disponível para o período selecionado")
 
 if __name__ == "__main__":
     main()

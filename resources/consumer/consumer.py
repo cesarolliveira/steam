@@ -22,12 +22,6 @@ OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
 LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
 
-# Parâmetros de Detecção de Outliers
-OUTLIER_METHOD = os.getenv('OUTLIER_METHOD', 'iqr')  # combined, iqr, zscore, mad
-IQR_MULTIPLIER = float(os.getenv('IQR_MULTIPLIER', 1.5))
-ZSCORE_THRESHOLD = float(os.getenv('ZSCORE_THRESHOLD', 3.0))
-MAD_THRESHOLD = float(os.getenv('MAD_THRESHOLD', 3.5))
-
 # Configuração de logging
 logging.basicConfig(
     level=logging.INFO,
@@ -83,8 +77,9 @@ def setup_queues(channel, queues):
 # ==============================================
 # FUNÇÕES DE PROCESSAMENTO DE DADOS
 # ==============================================
+
 def calculate_statistics(readings):
-    """Calcula estatísticas para um conjunto de leituras"""
+    """Calcula estatísticas e detecta outliers com base em 10% da média"""
     try:
         arr = np.array(readings)
         stats = {
@@ -97,86 +92,33 @@ def calculate_statistics(readings):
             'q3': round(float(np.percentile(arr, 75)), 2)
         }
 
-        # Detecção de Outliers
-        outliers = {
-            'iqr': detect_outliers_iqr(readings),
-            'zscore': detect_outliers_zscore(readings),
-            'mad': detect_outliers_mad(readings)
-        }
+        # Limites de 10% em relação à média atual
+        mean_val = stats['mean']
+        lower_bound = round(mean_val * 0.9, 2)  # 10% abaixo
+        upper_bound = round(mean_val * 1.1, 2)  # 10% acima
 
-        # Combina resultados conforme método selecionado
-        if OUTLIER_METHOD == 'combined':
-            combined = {}
-            for method in ['iqr', 'zscore', 'mad']:
-                combined.update(outliers[method])
-            stats['outliers'] = combined
-        else:
-            stats['outliers'] = outliers.get(OUTLIER_METHOD, {})
+        stats.update({
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'allowed_variation': 10  # 10% de variação
+        })
 
-        stats['total_outliers'] = len(stats['outliers'])
+        # Identificação de outliers
+        outliers = {}
+        for idx, temp in enumerate(readings):
+            if temp < lower_bound or temp > upper_bound:
+                outliers[str(uuid.uuid4())] = {  # ID único para cada outlier
+                    'value': temp,
+                    'timestamp': datetime.now().isoformat(),
+                    'deviation': round(abs(temp - mean_val) / mean_val * 100, 2)
+                }
+
+        stats['outliers'] = outliers
+        stats['total_outliers'] = len(outliers)
         return stats
 
     except Exception as e:
         logger.error(f"Erro no cálculo estatístico: {str(e)}")
-        return {}
-
-def detect_outliers_iqr(readings):
-    """Detecta outliers usando o método IQR"""
-    try:
-        if len(readings) < 4:
-            return {}
-            
-        q1 = np.percentile(readings, 25)
-        q3 = np.percentile(readings, 75)
-        iqr = q3 - q1
-        
-        lower = q1 - (IQR_MULTIPLIER * iqr)
-        upper = q3 + (IQR_MULTIPLIER * iqr)
-        
-        return {
-            str(idx): temp
-            for idx, temp in enumerate(readings)
-            if temp < lower or temp > upper
-        }
-    except Exception as e:
-        logger.error(f"Erro no IQR: {str(e)}")
-        return {}
-
-def detect_outliers_zscore(readings):
-    """Detecta outliers usando Z-Score"""
-    try:
-        if len(readings) < 4:
-            return {}
-            
-        z_scores = (readings - np.mean(readings)) / np.std(readings)
-        return {
-            str(idx): temp
-            for idx, (temp, z) in enumerate(zip(readings, z_scores))
-            if abs(z) > ZSCORE_THRESHOLD
-        }
-    except Exception as e:
-        logger.error(f"Erro no Z-Score: {str(e)}")
-        return {}
-
-def detect_outliers_mad(readings):
-    """Detecta outliers usando Median Absolute Deviation (MAD)"""
-    try:
-        if len(readings) < 4:
-            return {}
-            
-        median = np.median(readings)
-        mad = np.median(np.abs(readings - median))
-        if mad == 0:
-            return {}
-            
-        modified_z = 0.6745 * (readings - median) / mad
-        return {
-            str(idx): temp
-            for idx, (temp, z) in enumerate(zip(readings, modified_z))
-            if abs(z) > MAD_THRESHOLD
-        }
-    except Exception as e:
-        logger.error(f"Erro no MAD: {str(e)}")
         return {}
 
 # ==============================================
@@ -205,11 +147,9 @@ def save_results(sensor, stats):
             data[sensor][batch_id] = {
                 **stats,
                 'processing_time': datetime.now().isoformat(),
-                'outlier_method': OUTLIER_METHOD,
-                'outlier_params': {
-                    'iqr_multiplier': IQR_MULTIPLIER,
-                    'zscore_threshold': ZSCORE_THRESHOLD,
-                    'mad_threshold': MAD_THRESHOLD
+                'outlier_method': 'percentage',
+                'outlier_params ': {
+                    'variation_percent': 10
                 }
             }
             
@@ -250,6 +190,9 @@ def process_message(channel, method, properties, body):
         
         # Confirma o processamento
         channel.basic_ack(delivery_tag=method.delivery_tag)
+        
+        logger.info(f"Processamento concluído para {sensor}")
+        logger.info(f"Estatísticas: {stats}")
         
     except json.JSONDecodeError:
         logger.error("Mensagem com formato inválido")
