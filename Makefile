@@ -127,6 +127,7 @@ start-consumer:
 
 stop-consumer:
 	helm uninstall -n steam consumer
+	rm -rfv /root/steam/data
 
 start-streamlit:
 	kubectl apply -f resources/streamlit/deployment.yaml
