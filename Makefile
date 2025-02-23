@@ -115,8 +115,7 @@ stop-producer:
 	kubectl delete -f resources/producer/deployment.yaml
 
 start-consumer:
-#	Verifica se ${environment} foi definido
-    if [ -z "${environment}" ]; then \
+	@if [ -z "${environment}" ]; then \
 		echo "Variável environment não definida, opções: vps ou rasp-berry."; \
 		exit 1; \
 	fi
