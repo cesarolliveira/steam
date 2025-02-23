@@ -6,7 +6,6 @@ export HOST_UID:=$(shell id --user)
 export HOST_USER:=$(shell id --user --name)
 export HOST_GID:=$(shell id --group)
 export HOST_GROUP:=$(shell id --group --name)
-export DATE_CRONJOB:=$(shell date +%s) # resolver B.o
 
 
 COLOR_RESET := $(shell tput sgr0)
@@ -97,40 +96,6 @@ help:
 	@echo '  ${COLOR_ITEM}user${COLOR_RESET}                   $(HOST_USER)(uid=$(HOST_UID))'
 	@echo '  ${COLOR_ITEM}group${COLOR_RESET}                  $(HOST_GROUP)(gid=$(HOST_GID))'
 
-build:
-	DOCKER_BUILDKIT=1 docker compose --file $(DOCKER_COMPOSE_FILE) build $(options) $(service)
-
-rebuild:
-	$(CMAKE) build options="--no-cache $(options)"
-
-deploy:
-	@echo 'Building the Streamlit temperature app...'
-	docker build -t streamlit-temperature-app .
-	@echo 'Running the Streamlit temperature app on port 8501...'
-	docker run -p 8501:8501 streamlit-temperature-app
-
-
-up:
-	docker compose --file $(DOCKER_COMPOSE_FILE) up --detach $(SERVICE_APP)
-
-down:
-	docker compose --file $(DOCKER_COMPOSE_FILE) down
-
-run:
-	docker compose --file $(DOCKER_COMPOSE_FILE) run --rm $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
-
-exec:
-	docker compose --file $(DOCKER_COMPOSE_FILE) exec $(if $(service),$(service),$(SERVICE_APP)) $(cmd)
-
-bash:
-	$(CMAKE) run cmd="/bin/bash $(cmd)"
-
-shell:
-	$(CMAKE) run cmd="/bin/sh $(cmd)"
-
-log:
-	docker compose --file $(DOCKER_COMPOSE_FILE) logs $(service)
-
 build-consumer:
 	docker buildx create --use
 	docker buildx build --file Dockerfile --no-cache --platform linux/amd64,linux/arm64 --target consumer --tag manoelpg/consumer:v1.0 --push .
@@ -153,6 +118,12 @@ start-streamlit:
 	kubectl apply -f resources/streamlit/deployment.yaml
 	kubectl apply -f resources/streamlit/service.yaml
 	kubectl apply -f resources/streamlit/ingress.yaml
+
+stop-streamlit:
+	kubectl delete -f resources/streamlit/deployment.yaml
+	kubectl delete -f resources/streamlit/service.yaml
+	kubectl delete -f resources/streamlit/ingress.yaml
+
 
 # Docker targets:
 .PHONY: prune prune-image prune-dangling-image
