@@ -114,6 +114,17 @@ start-producer:
 stop-producer:
 	kubectl delete -f resources/producer/deployment.yaml
 
+start-consumer:
+#	Verifica se ${environment} foi definido
+    if [ -z "${environment}" ]; then \
+		echo "Variável environment não definida, opções: vps ou rasp-berry."; \
+		exit 1; \
+	fi
+	helm upgrade --install --create-namespace --namespace steam consumer ./helm -f helm/values.yaml -f helm/environment/${environment}.yaml
+
+stop-consumer:
+	helm uninstall -n steam consumer
+
 start-streamlit:
 	kubectl apply -f resources/streamlit/deployment.yaml
 	kubectl apply -f resources/streamlit/service.yaml
