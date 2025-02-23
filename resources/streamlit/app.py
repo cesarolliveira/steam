@@ -58,14 +58,19 @@ def plot_series_temporais(df, sensor):
     
     fig, ax = plt.subplots(2, 1, figsize=(12, 10))
     
-    # Gráfico de Média com faixa de variação
+    # Gráfico de Média com faixa de variação e quartis
     sns.lineplot(data=df_filtered, x='timestamp', y='mean', ax=ax[0], label='Média', color='blue')
+    sns.lineplot(data=df_filtered, x='timestamp', y='q1', ax=ax[0], label='Q1', color='green', linestyle='--')
+    sns.lineplot(data=df_filtered, x='timestamp', y='q3', ax=ax[0], label='Q3', color='orange', linestyle='--')
+    
     ax[0].fill_between(df_filtered['timestamp'], 
                       df_filtered['min'], 
                       df_filtered['max'], 
                       color='blue', alpha=0.1)
+    
     ax[0].set_title(f'Evolução Temporal - {sensor}')
     ax[0].set_ylabel('Temperatura (°C)')
+    ax[0].legend(loc='upper left')
     
     # Gráfico de Outliers
     sns.barplot(data=df_filtered, x='timestamp', y='total_outliers', ax=ax[1], color='red')

@@ -39,7 +39,6 @@ WORKDIR /app
 
 COPY resources/streamlit/app.py /app/app.py
 COPY resources/streamlit/requirements.txt /app/requirements.txt
-COPY data/result.json /app/data/result.json
 
 RUN pip install -r requirements.txt
 
