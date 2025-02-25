@@ -91,7 +91,7 @@ livenessProbe: # Verifica se o container está saudável
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4
+  maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 70
 
