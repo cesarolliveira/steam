@@ -1,19 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: producer  # Nome do Deployment para fácil identificação no cluster
-  namespace: steam  # Namespace onde o Deployment será criado
+  name: producer
+  namespace: steam
 spec:
-  replicas: 1  # Define a quantidade de réplicas do serviço, aqui é apenas 1
+  replicas: 1
   selector:
     matchLabels:
-      app: producer  # Define o seletor para encontrar Pods com essa label
+      app: producer
   template:
     metadata:
       labels:
-        app: producer  # Define a label do Pod para o seletor encontrar
+        app: producer
     spec:
       containers:
-      - name: producer  # Nome do contêiner
-        image: manoelpg/producer:v1.0  # Imagem Docker do serviço
-        imagePullPolicy: Always  # Política de atualização da imagem
+      - name: producer
+        image: manoelpg/producer:v1.0
+        imagePullPolicy: Always
+        resources:
+          limits:
+            cpu: 200m  # Limite de CPU adicionado
+            memory: 100Mi  # Limite de memória adicionado
