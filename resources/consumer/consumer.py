@@ -9,6 +9,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from filelock import FileLock
+from collections import defaultdict
+import ujson
 
 # ==============================================
 # CONFIGURAÇÕES GLOBAIS (variáveis de ambiente)
@@ -21,6 +23,8 @@ RABBITMQ_API_PORT = os.getenv('RABBITMQ_API_PORT', '15672')
 OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
 LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
+BATCH_SIZE = 50  # Tamanho do lote para processamento em batch
+FLUSH_INTERVAL = 5  # Segundos entre flushes se o batch não estiver cheio
 
 # Configuração de logging
 logging.basicConfig(
@@ -32,6 +36,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# ==============================================
+# VARIÁVEIS GLOBAIS DO PROCESSAMENTO
+# ==============================================
+buffer = defaultdict(list)  # {sensor: [(stats, delivery_tag)]}
+last_flush = time.time()
 
 # ==============================================
 # FUNÇÕES AUXILIARES
@@ -61,7 +71,7 @@ def setup_queues(channel, queues):
             channel.queue_declare(
                 queue=queue,
                 durable=True,
-                passive=True  # Apenas verifica se a fila existe
+                passive=True
             )
             channel.basic_consume(
                 queue=queue,
@@ -77,7 +87,6 @@ def setup_queues(channel, queues):
 # ==============================================
 # FUNÇÕES DE PROCESSAMENTO DE DADOS
 # ==============================================
-
 def calculate_statistics(readings):
     """Calcula estatísticas e detecta outliers com base em 10% da média"""
     try:
@@ -92,22 +101,20 @@ def calculate_statistics(readings):
             'q3': round(float(np.percentile(arr, 75)), 2)
         }
 
-        # Limites de 10% em relação à média atual
         mean_val = stats['mean']
-        lower_bound = round(mean_val * 0.9, 2)  # 10% abaixo
-        upper_bound = round(mean_val * 1.1, 2)  # 10% acima
+        lower_bound = round(mean_val * 0.9, 2)
+        upper_bound = round(mean_val * 1.1, 2)
 
         stats.update({
             'lower_bound': lower_bound,
             'upper_bound': upper_bound,
-            'allowed_variation': 10  # 10% de variação
+            'allowed_variation': 10
         })
 
-        # Identificação de outliers
         outliers = {}
         for idx, temp in enumerate(readings):
             if temp < lower_bound or temp > upper_bound:
-                outliers[str(uuid.uuid4())] = {  # ID único para cada outlier
+                outliers[str(uuid.uuid4())] = {
                     'value': temp,
                     'timestamp': datetime.now().isoformat(),
                     'deviation': round(abs(temp - mean_val) / mean_val * 100, 2)
@@ -122,85 +129,97 @@ def calculate_statistics(readings):
         return {}
 
 # ==============================================
-# GERENCIAMENTO DE ARQUIVOS
+# GERENCIAMENTO DE ARQUIVOS (OTIMIZADO)
 # ==============================================
-def save_results(sensor, stats):
-    """Salva resultados no arquivo JSON com lock"""
+def flush_buffer(channel, force=False):
+    """Processa o buffer e esvazia"""
+    global last_flush, buffer
+    now = time.time()
+    
+    if not force and (sum(len(v) for v in buffer.values()) < BATCH_SIZE and now - last_flush < FLUSH_INTERVAL):
+        return
+    
+    last_flush = now
+    current_buffer = buffer.copy()
+    buffer.clear()
+    
+    if not current_buffer:
+        return
+
     try:
         Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
-        lock = FileLock(LOCK_FILE, timeout=60)
+        lock = FileLock(LOCK_FILE, timeout=120)
         
         with lock:
-            # Carrega dados existentes
             data = {}
             if Path(OUTPUT_FILE).exists():
                 with open(OUTPUT_FILE, 'r') as f:
-                    data = json.load(f)
+                    data = ujson.load(f)
             
-            # Gera ID único para o lote
-            batch_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
-            
-            # Estrutura de armazenamento
-            if sensor not in data:
-                data[sensor] = {}
+            delivery_tags = []
+            for sensor, entries in current_buffer.items():
+                stats_batch = [e[0] for e in entries]
+                delivery_tags.extend([e[1] for e in entries])
                 
-            data[sensor][batch_id] = {
-                **stats,
-                'processing_time': datetime.now().isoformat(),
-                'outlier_method': 'percentage',
-                'outlier_params ': {
-                    'variation_percent': 10
-                }
-            }
+                if sensor not in data:
+                    data[sensor] = {}
+                
+                for stats in stats_batch:
+                    batch_id = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+                    data[sensor][batch_id] = {
+                        **stats,
+                        'processing_time': datetime.now().isoformat(),
+                        'outlier_method': 'percentage',
+                        'outlier_params': {
+                            'variation_percent': 10
+                        }
+                    }
             
-            # Write to temporary file first
             temp_file = f"{OUTPUT_FILE}.tmp"
             with open(temp_file, 'w') as f:
-                json.dump(data, f, indent=2)
+                ujson.dump(data, f, indent=2)
                 
-            # Atomic replace
             os.replace(temp_file, OUTPUT_FILE)
-            logger.info(f"Dados salvos para {sensor} | Lote: {batch_id}")
+            logger.info(f"Salvo {sum(len(v) for v in current_buffer.values())} mensagens")
             
+            for tag in delivery_tags:
+                channel.basic_ack(tag)
+                
     except Exception as e:
-        logger.error(f"Erro ao salvar dados: {str(e)}")
-        raise
+        logger.error(f"Erro no flush: {str(e)}. Reenfileirando mensagens.")
+        for sensor, entries in current_buffer.items():
+            for entry in entries:
+                try:
+                    channel.basic_nack(entry[1], requeue=True)
+                except Exception as nack_error:
+                    logger.error(f"Erro ao reenfileirar: {str(nack_error)}")
 
 # ==============================================
-# CONEXÃO E PROCESSAMENTO DE MENSAGENS
+# PROCESSAMENTO DE MENSAGENS (OTIMIZADO)
 # ==============================================
 def process_message(channel, method, properties, body):
-    """Processa cada mensagem recebida"""
+    """Processa mensagens e acumula no buffer"""
     try:
-        # Decodifica a mensagem
-        message = json.loads(body.decode())
+        message = ujson.loads(body.decode())
         sensor = message.get('sensor', 'unknown')
         readings = message.get('leituras', [])
         
         if not readings:
             raise ValueError("Mensagem sem dados de leitura")
             
-        logger.debug(f"Processando {len(readings)} leituras de {sensor}")
-        
-        # Calcula estatísticas
         stats = calculate_statistics(readings)
+        buffer[sensor].append( (stats, method.delivery_tag) )
         
-        # Salva resultados
-        save_results(sensor, stats)
+        logger.debug(f"Mensagem acumulada para {sensor} | Buffer: {len(buffer[sensor])}")
+        flush_buffer(channel)
         
-        # Confirma o processamento
-        channel.basic_ack(delivery_tag=method.delivery_tag)
-        
-        logger.info(f"Processamento concluído para {sensor}")
-        logger.info(f"Estatísticas: {stats}")
-        
-    except json.JSONDecodeError:
-        logger.error("Mensagem com formato inválido")
-        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
     except Exception as e:
         logger.error(f"Erro no processamento: {str(e)}")
-        channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        channel.basic_nack(method.delivery_tag, requeue=True)
 
+# ==============================================
+# CONEXÃO E LOOP PRINCIPAL
+# ==============================================
 def setup_connection():
     """Configura a conexão com o RabbitMQ"""
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
@@ -214,7 +233,7 @@ def setup_connection():
     
     connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
-    channel.basic_qos(prefetch_count=20)
+    channel.basic_qos(prefetch_count=BATCH_SIZE * 2)
     return connection, channel
 
 def main_loop():
@@ -229,24 +248,21 @@ def main_loop():
     while True:
         connection = None
         try:
-            # Estabelece conexão
             connection, channel = setup_connection()
+            all_queues = filter_queues(get_rabbitmq_queues(), QUEUE_PREFIX)
             
-            # Descobre e configura filas dinamicamente
-            all_queues = get_rabbitmq_queues()
-            target_queues = filter_queues(all_queues, QUEUE_PREFIX)
-            
-            if not target_queues:
+            if not all_queues:
                 logger.warning("Nenhuma fila encontrada. Verifique o prefixo.")
                 time.sleep(30)
                 continue
                 
-            setup_queues(channel, target_queues)
-            logger.info(f"Monitorando {len(target_queues)} fila(s)")
+            setup_queues(channel, all_queues)
+            logger.info(f"Monitorando {len(all_queues)} fila(s)")
             
-            # Inicia o consumo de mensagens
-            channel.start_consuming()
-            
+            while True:
+                channel.start_consuming()
+                flush_buffer(channel, force=True)
+                
         except pika.exceptions.AMQPConnectionError:
             logger.error("Conexão perdida. Reconectando em 30 segundos...")
             time.sleep(30)
@@ -259,8 +275,8 @@ def main_loop():
         finally:
             if connection and connection.is_open:
                 connection.close()
+            flush_buffer(channel, force=True)
 
 if __name__ == "__main__":
-    # Verifica/Cria diretório de saída
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
     main_loop()

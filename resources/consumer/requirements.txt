@@ -2,3 +2,4 @@ pika
 numpy
 filelock
 requests
+ujson
