@@ -94,7 +94,8 @@ autoscaling:
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80 # Utilização de CPU
   targetMemoryUtilizationPercentage: 80 # Utilização de memória
-  scaleDownUtilizationThreshold: 0.6 # O pod será finalizado quando a utilização de CPU ou memória for menor que 50%
+  scaleDownUtilizationThreshold: 0.6 # O pod será finalizado quando a utilização de CPU ou memória for menor que 60%
+  stabilizationWindowSeconds: 30  # Aguarda apenas 30 segundos antes de reduzir pods
 
 # Additional volumes on the output Deployment definition.
 volume:
