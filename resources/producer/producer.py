@@ -23,7 +23,7 @@ RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'user')
 RABBITMQ_PASS = os.getenv('RABBITMQ_PASS', 'steam@2025')
 
 NUM_SENSORES = int(os.getenv('NUM_SENSORES', 10))            
-INTERVALO_COLETA = int(os.getenv('INTERVALO_COLETA', 1))    
+INTERVALO_COLETA = int(os.getenv('INTERVALO_COLETA', 0.5))    
 TEMPERATURA_MIN = int(os.getenv('TEMPERATURA_MIN', 0))      
 TEMPERATURA_MAX = int(os.getenv('TEMPERATURA_MAX', 100))    
 NUM_LEITURAS = 60                                           
