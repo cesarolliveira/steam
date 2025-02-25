@@ -24,7 +24,7 @@ OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
 LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
 BATCH_SIZE = 50  # Tamanho do lote para processamento em batch
-FLUSH_INTERVAL = 5  # Segundos entre flushes se o batch não estiver cheio
+FLUSH_INTERVAL = 2  # Segundos entre flushes se o batch não estiver cheio
 
 # Configuração de logging
 logging.basicConfig(
