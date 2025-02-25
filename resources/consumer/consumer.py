@@ -23,8 +23,9 @@ RABBITMQ_API_PORT = os.getenv('RABBITMQ_API_PORT', '15672')
 OUTPUT_DIR = os.getenv('OUTPUT_DIR', '/data')
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'result.json')
 LOCK_FILE = os.path.join(OUTPUT_DIR, 'result.lock')
-BATCH_SIZE = 50  # Tamanho do lote para processamento em batch
-FLUSH_INTERVAL = 2  # Segundos entre flushes se o batch não estiver cheio
+BATCH_SIZE = 50          # Máximo de mensagens por lote
+MIN_BATCH_SIZE = 25      # Mínimo de mensagens para processamento
+FLUSH_INTERVAL = 5       # Segundos entre flushes
 
 # Configuração de logging
 logging.basicConfig(
@@ -132,12 +133,14 @@ def calculate_statistics(readings):
 # GERENCIAMENTO DE ARQUIVOS E BUFFER
 # ==============================================
 def flush_buffer(channel, force=False):
-    """Processa o buffer e esvazia"""
     global last_flush, buffer
     now = time.time()
+    current_total = sum(len(v) for v in buffer.values())
     
-    if not force and (sum(len(v) for v in buffer.values()) < BATCH_SIZE and now - last_flush < FLUSH_INTERVAL):
-        return
+    # Lógica de controle do flush
+    if not force:
+        if current_total < BATCH_SIZE and (now - last_flush < FLUSH_INTERVAL or current_total < MIN_BATCH_SIZE):
+            return
     
     last_flush = now
     current_buffer = buffer.copy()
@@ -183,7 +186,7 @@ def flush_buffer(channel, force=False):
             logger.info(f"Iniciando processamento no POD {os.uname().nodename}.")
             logger.info(f"Salvo {sum(len(v) for v in current_buffer.values())} mensagens.")
             logger.info(f"Finalizado processamento no POD {os.uname().nodename}.")
-            
+
             for tag in delivery_tags:
                 channel.basic_ack(tag)
                 
