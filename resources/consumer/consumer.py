@@ -129,7 +129,7 @@ def calculate_statistics(readings):
         return {}
 
 # ==============================================
-# GERENCIAMENTO DE ARQUIVOS (OTIMIZADO)
+# GERENCIAMENTO DE ARQUIVOS E BUFFER
 # ==============================================
 def flush_buffer(channel, force=False):
     """Processa o buffer e esvazia"""
@@ -180,7 +180,9 @@ def flush_buffer(channel, force=False):
                 ujson.dump(data, f, indent=2)
                 
             os.replace(temp_file, OUTPUT_FILE)
-            logger.info(f"Salvo {sum(len(v) for v in current_buffer.values())} mensagens")
+            logger.info(f"Iniciando processamento no POD {os.uname().nodename}.")
+            logger.info(f"Salvo {sum(len(v) for v in current_buffer.values())} mensagens.")
+            logger.info(f"Finalizado processamento no POD {os.uname().nodename}.")
             
             for tag in delivery_tags:
                 channel.basic_ack(tag)
@@ -195,7 +197,7 @@ def flush_buffer(channel, force=False):
                     logger.error(f"Erro ao reenfileirar: {str(nack_error)}")
 
 # ==============================================
-# PROCESSAMENTO DE MENSAGENS (OTIMIZADO)
+# PROCESSAMENTO DE MENSAGENS
 # ==============================================
 def process_message(channel, method, properties, body):
     """Processa mensagens e acumula no buffer"""
