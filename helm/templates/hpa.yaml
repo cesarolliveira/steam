@@ -29,4 +29,13 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 30  # Reduz o tempo de espera para apenas 30 segundos
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+      selectPolicy: Min
+      scaleDownUtilizationThreshold: 0.6  
 {{- end }}
