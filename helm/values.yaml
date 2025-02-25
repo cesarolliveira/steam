@@ -91,10 +91,10 @@ livenessProbe: # Verifica se o container está saudável
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 70 # Utilização de CPU
-  targetMemoryUtilizationPercentage: 70 # Utilização de memória
-  scaleDownUtilizationThreshold: 0.5 # O pod será finalizado quando a utilização de CPU ou memória for menor que 50%
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80 # Utilização de CPU
+  targetMemoryUtilizationPercentage: 80 # Utilização de memória
+  scaleDownUtilizationThreshold: 0.6 # O pod será finalizado quando a utilização de CPU ou memória for menor que 50%
 
 # Additional volumes on the output Deployment definition.
 volume:
