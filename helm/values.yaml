@@ -91,9 +91,9 @@ livenessProbe: # Verifica se o container está saudável
 autoscaling:
   enabled: true
   minReplicas: 1
-  maxReplicas: 3
-  targetCPUUtilizationPercentage: 80 # Utilização de CPU
-  targetMemoryUtilizationPercentage: 80 # Utilização de memória
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70 # Utilização de CPU
+  targetMemoryUtilizationPercentage: 70 # Utilização de memória
 
 # Additional volumes on the output Deployment definition.
 volume:

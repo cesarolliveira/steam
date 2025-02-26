@@ -37,5 +37,5 @@ spec:
           value: 100
           periodSeconds: 15
       selectPolicy: Min
-      scaleDownUtilizationThreshold: 0.6  
+      scaleDownUtilizationThreshold: 0.5
 {{- end }}
