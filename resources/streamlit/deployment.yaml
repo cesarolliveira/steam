@@ -22,8 +22,11 @@ spec:
           mountPath: /app/data  # Caminho onde o volume será montado no container
         resources:
           limits:
-            cpu: 250m  # Limite de CPU adicionado
-            memory: 100Mi  # Limite de memória adicionado
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
       volumes:
       - name: host-volume  # Nome do volume
         hostPath:
