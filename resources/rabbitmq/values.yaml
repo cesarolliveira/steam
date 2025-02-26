@@ -789,16 +789,14 @@ containerSecurityContext:
 ##
 resourcesPreset: "micro"
 ## @param resources Set container requests and limits for different resources like CPU or memory (essential for production workloads)
-## Example:
-## resources:
-##   requests:
-##     cpu: 2
-##     memory: 512Mi
-##   limits:
-##     cpu: 3
-##     memory: 1024Mi
-##
-resources: {}
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
 ## Configure RabbitMQ containers' extra options for liveness probe
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
 ## @param livenessProbe.enabled Enable livenessProbe
