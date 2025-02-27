@@ -11,6 +11,7 @@ from pathlib import Path
 from filelock import FileLock
 from collections import defaultdict
 import ujson
+import zipfile
 
 # ==============================================
 # CONFIGURAÇÕES GLOBAIS (variáveis de ambiente)
@@ -43,6 +44,90 @@ logger = logging.getLogger(__name__)
 # ==============================================
 buffer = defaultdict(list)  # {sensor: [(stats, delivery_tag)]}
 last_flush = time.time()
+
+# ==============================================
+# GERENCIAMENTO DE ARQUIVOS E BUFFER
+# ==============================================
+def split_and_zip_large_file(file_path, max_size=5*1024*1024):
+    """Divide e zipa arquivos maiores que o tamanho especificado"""
+    try:
+        file_size = os.path.getsize(file_path)
+        if file_size <= max_size:
+            return
+
+        logger.info(f"Arquivo {file_path} excedeu 5MB. Iniciando divisão e compactação...")
+        
+        with open(file_path, 'r') as f:
+            data = ujson.load(f)
+
+        part_num = 1
+        current_chunk = {}
+        current_size = 0
+
+        # Ordena os sensores para garantir consistência
+        for sensor in sorted(data.keys()):
+            sensor_data = {sensor: data[sensor]}
+            sensor_json = ujson.dumps(sensor_data)
+            sensor_size = len(sensor_json)
+
+            # Verifica se precisa iniciar um novo chunk
+            if current_size + sensor_size > max_size and current_chunk:
+                # Escreve o chunk atual
+                part_filename = f"{file_path}_part{part_num}"
+                with open(part_filename, 'w') as part_file:
+                    ujson.dump(current_chunk, part_file)
+                
+                # Zip e remove o arquivo original
+                with zipfile.ZipFile(f"{part_filename}.zip", 'w') as zf:
+                    zf.write(part_filename, arcname=os.path.basename(part_filename))
+                os.remove(part_filename)
+                
+                part_num += 1
+                current_chunk = {}
+                current_size = 0
+
+            # Adiciona ao chunk atual
+            current_chunk.update(sensor_data)
+            current_size += sensor_size
+
+        # Escreve o último chunk
+        if current_chunk:
+            part_filename = f"{file_path}_part{part_num}"
+            with open(part_filename, 'w') as part_file:
+                ujson.dump(current_chunk, part_file)
+            
+            with zipfile.ZipFile(f"{part_filename}.zip", 'w') as zf:
+                zf.write(part_filename, arcname=os.path.basename(part_filename))
+            os.remove(part_filename)
+
+        # Cria novo arquivo vazio
+        with open(file_path, 'w') as f:
+            f.write('{}')
+
+        logger.info(f"Arquivo {file_path} dividido em {part_num} partes zipadas")
+
+        # Gerenciar arquivos ZIP para manter até 10
+        zip_files = []
+        for f in os.listdir(OUTPUT_DIR):
+            if f.endswith('.zip'):
+                file_path_zip = os.path.join(OUTPUT_DIR, f)
+                mod_time = os.path.getmtime(file_path_zip)
+                zip_files.append((mod_time, file_path_zip))
+        
+        # Ordenar do mais antigo para o mais novo
+        zip_files.sort(key=lambda x: x[0])
+        
+        # Remover excedentes mantendo apenas os 10 mais recentes
+        while len(zip_files) > 10:
+            oldest = zip_files.pop(0)
+            try:
+                os.remove(oldest[1])
+                logger.info(f"Arquivo ZIP {oldest[1]} removido para manter limite de 10 arquivos")
+            except Exception as e:
+                logger.error(f"Erro ao remover arquivo ZIP {oldest[1]}: {str(e)}")
+
+    except Exception as e:
+        logger.error(f"Erro ao dividir/zipar arquivo: {str(e)}")
 
 # ==============================================
 # FUNÇÕES AUXILIARES
@@ -183,9 +268,11 @@ def flush_buffer(channel, force=False):
                 ujson.dump(data, f, indent=2)
                 
             os.replace(temp_file, OUTPUT_FILE)
-            logger.info(f"Iniciando processamento no POD {os.uname().nodename}.")
-            logger.info(f"Salvo {sum(len(v) for v in current_buffer.values())} mensagens.")
-            logger.info(f"Finalizado processamento no POD {os.uname().nodename}.")
+            
+            # Verifica tamanho e divide/zipa se necessário
+            split_and_zip_large_file(OUTPUT_FILE)
+
+            logger.info(f" Processamento no POD {os.uname().nodename}. - Salvo {sum(len(v) for v in current_buffer.values())} mensagens.")
 
             for tag in delivery_tags:
                 channel.basic_ack(tag)
