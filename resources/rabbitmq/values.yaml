@@ -1595,12 +1595,13 @@ volumePermissions:
   ##     memory: 1024Mi
   ##
   resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
     limits:
       cpu: 500m
-      memory: 1024Mi
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
   ## Init container' Security Context
   ## Note: the chown of the data folder is done to containerSecurityContext.runAsUser
   ## and not the below volumePermissions.containerSecurityContext.runAsUser
