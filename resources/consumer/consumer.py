@@ -48,14 +48,14 @@ last_flush = time.time()
 # ==============================================
 # GERENCIAMENTO DE ARQUIVOS E BUFFER
 # ==============================================
-def split_and_zip_large_file(file_path, max_size=5*1024*1024):
+def split_and_zip_large_file(file_path, max_size=10*1024*1024):
     """Divide e zipa arquivos maiores que o tamanho especificado"""
     try:
         file_size = os.path.getsize(file_path)
         if file_size <= max_size:
             return
 
-        logger.info(f"Arquivo {file_path} excedeu 5MB. Iniciando divisão e compactação...")
+        logger.info(f"Arquivo {file_path} excedeu 10MB. Iniciando divisão e compactação...")
         
         with open(file_path, 'r') as f:
             data = ujson.load(f)
