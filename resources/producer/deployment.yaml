@@ -21,3 +21,6 @@ spec:
           limits:
             cpu: 300m  # Limite de CPU adicionado
             memory: 100Mi  # Limite de memória adicionado
+          requests:
+            cpu: 150m
+            memory: 64Mi
