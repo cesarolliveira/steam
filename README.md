@@ -1,169 +1,231 @@
-## Deletar todas filas do rabbitmq
+# 🚀 STEAM
+
+## 📌 Pré-requisitos
+
+Certifique-se de que os seguintes pacotes estão instalados:
+
+- [x] Make
+- [x] Git
+- [x] Bash-completion
+- [x] K3s
+- [x] Helm
+
+## 🌍 Configuração do Traefik
+
+Para editar o serviço do Traefik e adicionar a porta de administração:
+
+```bash
+kubectl edit svc traefik -n kube-system
+```
+
+Adicione a seguinte configuração:
+
+```yaml
+- name: traefik
+  port: 9000
+  protocol: TCP
+  targetPort: 9000
+```
+
+---
+
+## 🐇 Instalação do RabbitMQ
+
+Adicionar o repositório Helm do RabbitMQ:
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+```
+
+Instalar o RabbitMQ:
+
+```bash
+helm upgrade --install --create-namespace --namespace steam rabbitmq bitnami/rabbitmq \
+  --version 15.0.6 -f resources/rabbitmq/values.yaml
+```
+
+### 🔑 Configuração do usuário
+
+```bash
+# Adicionar tag de administrador ao usuário
+kubectl exec -it rabbitmq-0 -n steam -- rabbitmqctl set_user_tags user administrator
+
+# Conceder permissões ao usuário
+kubectl exec -it rabbitmq-0 -n steam -- rabbitmqctl set_permissions -p / user ".*" ".*" ".*"
+
+# Alterar a senha do usuário
+kubectl exec -it rabbitmq-0 -n steam -- rabbitmqctl change_password user steam@2025
+
+# Autenticar usuário
+kubectl exec -it rabbitmq-0 -n steam -- rabbitmqctl authenticate_user user steam@2025
+```
+
+### 🗑️ Remover todas as filas do RabbitMQ
 
 ```bash
 kubectl exec -it -n steam rabbitmq-0 -- sh -c "rabbitmqctl list_queues | grep -v Listing | awk 'NR>2 {print \$1}' | xargs -I{} rabbitmqctl delete_queue {}"
 ```
 
-## Iniciar Producer
+---
+
+## ⚙️ Iniciando os serviços
+
+### 🏭 Producer
+
+Iniciar o **Producer**:
 
 ```bash
 make start-producer
 ```
 
-## Para Producer
+Parar o **Producer**:
 
 ```bash
 make stop-producer
 ```
 
-## Logs Producer
+Logs do **Producer**:
 
 ```bash
 kubectl logs -n steam -l app=producer -f
 ```
 
-## Iniciar Consumer
+### 🏗️ Consumer
+
+Iniciar o **Consumer**:
 
 ```bash
-# Iniciar consumer para VPS
+# Para VPS
 make start-consumer environment=vps
 
-# Iniciar consumer para Raspberry Pi
+# Para Raspberry Pi
 make start-consumer environment=rasp-berry
 ```
 
-## Para Consumer
+Parar o **Consumer**:
 
 ```bash
 make stop-consumer
 ```
 
-## Logs Consumer
+Logs do **Consumer**:
 
 ```bash
 kubectl logs -n steam -l app.kubernetes.io/instance=consumer -f
 ```
 
-## Iniciar Stramlit
+### 📊 Streamlit
+
+Iniciar o **Streamlit**:
 
 ```bash
 make start-streamlit
 ```
 
-## Para Streamlit
+Parar o **Streamlit**:
 
 ```bash
 make stop-streamlit
 ```
 
-## Logs Streamlit
+Logs do **Streamlit**:
 
 ```bash
 kubectl logs -n steam -l app=streamlit -f
 ```
 
-# Explicação dos campos da aba Queues do RabbitMQ
+## 📈 **AutoScaling Automático e Limitações de Recursos**  
 
-Na aba **Queues** do RabbitMQ, são exibidos os detalhes das filas configuradas no servidor. Cada campo fornece informações específicas sobre o estado, configuração e métricas das filas. Vou explicar cada um deles:
+O **Horizontal Pod Autoscaler (HPA)** é configurado para escalar automaticamente os pods com base na **utilização de CPU e memória**. Além disso, cada serviço tem restrições de **recursos máximos e mínimos** para garantir eficiência no uso do Kubernetes.
 
----
+### ⚙️ **Configuração de AutoScaling e Recursos por Serviço**  
 
-### **1. Name**
-- **Descrição**: Nome da fila, definido durante sua criação (pode ser gerado automaticamente se não for fornecido um nome).
-- **Exemplo**: `orders_queue`, `email_processing`.
+### 🏗️ **Consumer** (**Escala automática ativada**)  
+O **Consumer** escala automaticamente entre **1 e 6 réplicas** com base no uso de CPU e memória. Aumenta quando a utilização ultrapassa **70%** e reduz rapidamente quando cai abaixo de **50%**.
 
----
+```yaml
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
 
-### **2. Virtual Host (VHost)**
-- **Descrição**: Indica o *Virtual Host* ao qual a fila pertence. Virtual Hosts são ambientes isolados no RabbitMQ, usados para separar recursos (filas, exchanges, etc.) entre aplicações ou equipes.
-- **Exemplo**: `/` (VHost padrão), `/production`, `/test`.
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 30  # Tempo de espera reduzido para 30s antes de reduzir réplicas
+      policies:
+        - type: Percent
+          value: 100  # Remove todas as réplicas de uma vez, se possível
+          periodSeconds: 15  # Verifica a cada 15s se pode reduzir
+      selectPolicy: Min
+      scaleDownUtilizationThreshold: 0.5  # Se o uso cair abaixo de 50%, começa a reduzir
+```
 
----
+### 🏭 **Producer** (**1 réplica fixa**)  
+O **Producer** não precisa de escalonamento automático, pois a lógica de processamento de mensagens depende apenas dos **Consumers**. Ele opera sempre com **1 pod fixo**.
 
-### **3. Type**
-- **Descrição**: Tipo da fila. Os tipos mais comuns são:
-  - **Classic**: Fila tradicional do RabbitMQ (não tolerante a partições de rede).
-  - **Quorum**: Fila tolerante a partições, baseada em consenso (Raft), ideal para alta disponibilidade.
-  - **Stream**: Fila projetada para fluxo contínuo de mensagens, com retenção persistente e consumo sequencial.
-- **Exemplo**: `classic`, `quorum`, `stream`.
+```yaml
+resources:
+  limits:
+    cpu: 300m
+    memory: 100Mi
+  requests:
+    cpu: 150m
+    memory: 64Mi
+```
 
----
+### 🐇 **RabbitMQ** (**1 réplica fixa**)  
+O **RabbitMQ** opera com **1 única instância** e possui um limite de CPU e memória para evitar consumo excessivo.
 
-### **4. Features**
-- **Descrição**: Características especiais da fila:
-  - **D** (Durable): A fila persiste após reinicializações do servidor (se marcada).
-  - **E** (Exclusive): Fila exclusiva para uma conexão (é deletada quando a conexão é fechada).
-  - **AD** (Auto-Delete): A fila é automaticamente deletada quando o último consumidor se desconecta.
-  - **TTL**: Tempo de vida configurado para mensagens ou para a própria fila.
-- **Exemplo**: `D` (Duraável), `D, TTL`.
+```yaml
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+```
 
----
+### 📊 **Streamlit** (**1 réplica fixa**)  
+O **Streamlit** é a interface de monitoramento e visualização, então **não precisa de escalonamento**. Mantemos apenas **1 pod fixo** para evitar desperdício de recursos.
 
-### **5. State**
-- **Descrição**: Estado atual da fila:
-  - **Running**: Funcionando normalmente.
-  - **Idle**: Sem atividade (nenhuma mensagem ou consumidor).
-  - **Flow**: Pausada devido a controle de fluxo (backpressure).
-  - **Down** (em clusters): Replica não disponível.
-- **Exemplo**: `running`, `idle`.
-
----
-
-### **6. Ready / Unacked / Total**
-- **Ready**: Número de mensagens prontas para entrega (ainda não consumidas).
-- **Unacked**: Mensagens entregues a consumidores, mas ainda não confirmadas (*acknowledged*).
-- **Total**: Soma de `Ready` + `Unacked`.
-- **Exemplo**: `1000 (Ready) / 50 (Unacked) / 1050 (Total)`.
-
----
-
-### **7. Message Rates**
-- **Incoming**: Taxa de mensagens recebidas (publicadas na fila).
-- **Deliver/Get**: Taxa de mensagens entregues a consumidores ou recuperadas via `GET`.
-- **Ack**: Taxa de confirmações (*acknowledgments*) recebidas.
-- **Exemplo**: `1,000 msg/s (In)`, `500 msg/s (Deliver)`.
-
----
-
-### **8. Consumers**
-- **Descrição**: Número de consumidores ativos inscritos na fila.
-- **Relevância**: Se for `0`, as mensagens ficarão acumuladas até que um consumidor se conecte.
-- **Exemplo**: `5 consumers`.
-
----
-
-### **9. Memory**
-- **Descrição**: Memória RAM utilizada pela fila (em MB ou KB).
-- **Importante**: Filas do tipo *Stream* ou *Lazy* usam menos memória, pois armazenam mensagens em disco.
-- **Exemplo**: `45 MB`.
-
----
-
-### **10. Node**
-- **Descrição**: Nó do cluster onde a fila está localizada (em filas clássicas, é o nó mestre).
-- **Exemplo**: `rabbit@node1`, `rabbit@node2`.
+```yaml
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+```
 
 ---
 
-### **11. Policy**
-- **Descrição**: Política aplicada à fila (configurações dinâmicas como HA, TTL, limite de tamanho, etc.).
-- **Exemplo**: `ha-all` (alta disponibilidade), `max-length-1000` (limite de 1000 mensagens).
+## 🚀 **Resumo das Configurações**  
+
+| Serviço    | Escala | Mínimo de Réplicas | Máximo de Réplicas | CPU Máxima | Memória Máxima |
+|------------|--------|--------------------|--------------------|------------|----------------|
+| **Consumer** | **Automático** | 1 | 6 | 200m | 512Mi |
+| **Producer** | Fixo | 1 | 1 | 300m | 100Mi |
+| **RabbitMQ** | Fixo | 1 | 1 | 500m | 512Mi |
+| **Streamlit** | Fixo | 1 | 1 | 500m | 512Mi |
 
 ---
 
-### **12. Operations**
-- **Ações disponíveis**:
-  - **Purge**: Remove todas as mensagens prontas (Ready) da fila.
-  - **Delete**: Exclui a fila (somente se não houver consumidores).
-  - **Export/Import**: Backup/restauração de mensagens (para filas clássicas).
-- **Exemplo**: Botões `Purge`, `Delete`.
+### 🔄 **Como Funciona o AutoScaling?**  
 
----
+1. **Consumer Escala Automático:** Se a CPU/memória ultrapassar **70%**, novos pods serão adicionados até **6 réplicas**.
+2. **Redução Rápida:** Se a utilização cair abaixo de **50%**, os pods começam a ser removidos em até **15 segundos**.
+3. **Producer, RabbitMQ e Streamlit são fixos:** Mantêm **1 réplica única** para estabilidade e controle de recursos.
 
-### **Observações Importantes**:
-- **Filas Quorum/Stream**: Alguns campos (como `Memory` ou `Node`) podem se comportar diferentemente devido à natureza distribuída desses tipos.
-- **Filas Lazy**: Mensagens são armazenadas prioritariamente em disco (útil para filas muito grandes).
-
-
-estou trabalhando com k3s e helm para fazer o autoscale automatico do script abaixo, que está funcionando perfeitamente para aumentar a quantidade de replicas, porém quando não existe mais itens na fila eles não descem
-
+Essa configuração garante **eficiência no uso dos recursos**, escalando apenas o necessário e reduzindo rapidamente para evitar custos desnecessários! 🚀
