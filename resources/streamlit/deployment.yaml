@@ -1,25 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: streamlit  # Nome do Deployment para fácil identificação no cluster
-  namespace: steam  # Namespace onde o Deployment será criado
+  name: streamlit
+  namespace: steam
 spec:
-  replicas: 1  # Define a quantidade de réplicas do serviço, aqui é apenas 1
+  replicas: 1
   selector:
     matchLabels:
-      app: streamlit  # Define o seletor para encontrar Pods com essa label
+      app: streamlit
   template:
     metadata:
       labels:
-        app: streamlit  # Define a label do Pod para o seletor encontrar
+        app: streamlit
     spec:
       containers:
-      - name: streamlit  # Nome do contêiner
-        image: manoelpg/streamlit:v1.0  # Imagem Docker do serviço
-        imagePullPolicy: Always  # Garante que a imagem seja sempre baixada
+      - name: streamlit
+        image: manoelpg/streamlit:v1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8501
         volumeMounts:
-        - name: host-volume  # Nome do volume
-          mountPath: /app/data  # Caminho onde o volume será montado no container
+        - name: host-volume
+          mountPath: /app/data
         resources:
           limits:
             cpu: 500m
@@ -28,7 +30,7 @@ spec:
             cpu: 250m
             memory: 256Mi
       volumes:
-      - name: host-volume  # Nome do volume
+      - name: host-volume
         hostPath:
-          path: /root/steam/data  # Caminho absoluto no host
-          type: Directory  # Tipo do volume (pode ser Directory, DirectoryOrCreate, etc.)
+          path: /root/steam/data
+          type: Directory

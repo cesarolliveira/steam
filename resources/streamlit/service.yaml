@@ -1,15 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: streamlit-service  # Nome do Service
-  namespace: steam  # Namespace onde o Deployment será criado
-  labels:
-    app: streamlit
+  name: streamlit-service
+  namespace: steam
 spec:
   selector:
-    app: streamlit  # Conecta com o Deployment usando o mesmo label
+    app: streamlit
   ports:
     - protocol: TCP
-      port: 80  # Porta interna exposta pelo Service
-      targetPort: 8501  # Porta no contêiner
-  type: ClusterIP  # Tipo de Service (ClusterIP é padrão)
+      port: 80
+      targetPort: 8501
