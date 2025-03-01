@@ -5,12 +5,13 @@ metadata:
   namespace: kube-system
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-redirect-dashboard@kubernetescrd
 spec:
   rules:
   - host: traefik.mpgomes.com.br
     http:
       paths:
-      - path: /dashboard/
+      - path: /
         pathType: Prefix
         backend:
           service:
