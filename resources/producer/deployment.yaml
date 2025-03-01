@@ -19,7 +19,7 @@ spec:
         imagePullPolicy: Always
         resources:
           limits:
-            cpu: 300m  # Limite de CPU adicionado
+            cpu: 200m  # Limite de CPU adicionado
             memory: 100Mi  # Limite de memória adicionado
           requests:
             cpu: 150m
