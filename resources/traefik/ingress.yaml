@@ -10,7 +10,7 @@ spec:
   - host: traefik.mpgomes.com.br
     http:
       paths:
-      - path: /dashboard
+      - path: /dashboard/
         pathType: Prefix
         backend:
           service:
