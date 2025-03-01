@@ -1171,8 +1171,6 @@ ingress:
   ##
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
-    traefik.ingress.kubernetes.io/router.tls: "true"
-  # traefik.ingress.kubernetes.io/router.entrypoints: web
   # traefik.ingress.kubernetes.io/router.tls: "true"
   ## @param ingress.tls Enable TLS configuration for the hostname defined at `ingress.hostname` parameter
   ## TLS certificates will be retrieved from a TLS secret with name: {{- printf "%s-tls" .Values.ingress.hostname }}
